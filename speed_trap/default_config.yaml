@@ -1,0 +1,87 @@
+# speed-trap configuration. Unknown keys and out-of-range values are errors.
+camera:
+  # OpenCV intrinsics; optional (null = nominal OV5647 FOV, with a warning).
+  # Example:
+  #   intrinsics:
+  #     resolution: [1296, 972]                       # calibration size, px
+  #     matrix: [[fx, 0, cx], [0, fy, cy], [0, 0, 1]]  # 3x3, px
+  #     distortion: [k1, k2, p1, p2, k3]               # length 4, 5, 8, 12 or 14
+  intrinsics: null
+  pose:
+    height_m: 3.5      # camera height above the road, m (> 0)
+    pitch_deg: 12.0    # downward tilt, degrees
+    roll_deg: 0.0      # degrees
+    yaw_deg: 0.0       # degrees, 0 = looking along the road axis
+radar:
+  offset_m: { x: 0.0, y: 0.0, z: -0.3 }   # radar position relative to the camera, m
+  boresight: { yaw_deg: -8.0, pitch_deg: 0.0 }  # radar axis relative to the camera, degrees
+  fov_half_deg: 20.0       # half field of view, degrees (0, 90]; check the datasheet
+  range_m:
+    min: 1.0               # ignore targets closer than this, m (> 0)
+    max: null              # null = session.json max_distance_m; else m, > min
+  angle_sign: 1            # +1 or -1: flips the sign of the reported angle
+  approaching_byte: 0      # direction byte meaning "approaching": 0 or 1 (manual: 0)
+  clock_offset_ms: 0.0     # radar-to-camera clock offset, ms (can be negative)
+  report_hold_s: 0.3       # how long a radar report stays valid, s (> 0)
+road:
+  lane_heading_deg: 0.0    # lane direction vs. camera axis, degrees; for the cosine correction
+detector:
+  backend: rfdetr          # rfdetr (Apache-2.0) | ultralytics (AGPL-3.0, optional extra)
+  weights: rfdetr-small    # model name or path
+  device: mps              # mps | cuda | cpu
+  imgsz: 960               # inference size, px (>= 32)
+  every_n_frames: 1        # detector runs on every Nth frame, tracker fills in (>= 1)
+  conf: 0.35               # confidence threshold, 0..1
+  iou: 0.5                 # NMS IoU threshold, 0..1
+  classes: [car, truck, bus, motorcycle]  # vehicle classes to keep
+  roi: null                # optional polygon in image px, e.g. [[0, 300], [1296, 300], [1296, 972]]
+tracker:
+  type: bytetrack
+  track_activation_threshold: 0.35   # 0..1
+  lost_track_s: 1.5                  # keep a lost track this long, s (> 0)
+  match_threshold: 0.8               # 0..1
+  minimum_consecutive_frames: 1      # frames before a track is confirmed (>= 1)
+fusion:
+  gate:
+    range_base_m: 1.5      # base range gate, m (> 0)
+    range_per_m2: 0.002    # extra gate per m^2 of range, m (>= 0)
+    angle_margin_deg: 1.0  # extra angular margin, degrees (>= 0)
+  ambiguity_ratio: 0.7     # second-best/best cost above this drops the match, (0, 1]
+  max_range_m: 30.0        # no matching or capture beyond this, m (> 0)
+  lanes: null              # optional lateral lane boundaries, m, e.g. [-3.5, 0.0, 3.5]
+  direction_window_s: 0.5  # window used to decide direction of travel, s (> 0)
+  direction_min_travel_m: 0.5  # minimum radial travel to trust the direction, m (>= 0)
+  reliable_min_matches: 2  # matches needed before a speed is shown (>= 1)
+  reliable_max_age_s: 1.5  # speed expires after this long without a match, s (> 0)
+speed:
+  limit_kmh: 40            # speed limit, km/h (> 0)
+  limit_kmh_coming: null   # override for approaching traffic, km/h (> 0)
+  limit_kmh_going: null    # override for receding traffic, km/h (> 0)
+  cosine_correction: false # correct for the angle to the lane; off = never overstates
+capture:
+  enabled: false           # save a crop + JSON for each speeder
+  min_consecutive_over: 2  # consecutive over-limit reports required (>= 1)
+  crop_margin: 0.1         # extra margin around the vehicle box, fraction (>= 0)
+  save_full_frame: false   # also save the whole frame
+  jpeg_quality: 95         # 1..100
+  edge_margin_px: 2        # skip vehicles whose box is this close to the frame edge, px (>= 0)
+overlay:
+  style: tag               # only "tag" exists in v1
+  show:
+    wedge: true            # radar field-of-view wedge
+    range_rings: [10, 20, 40, 70]  # ring distances, m (> 0)
+    hud: true              # heads-up display
+  colors: { coming: "#35d0ba", going: "#ffb547", none: "#a7afb8", alert: "#ff4d5e" }  # #rrggbb
+lite:
+  pillar_height_m: 1.6     # assumed height of the tracked point above the road, m (> 0)
+  lost_track_s: 1.5        # drop a lite track after this long, s (> 0)
+output:
+  video_codec: h264
+  dir: out                 # output directory
+synth:
+  report_interval_s: 0.1   # synthetic radar report period, s (> 0)
+  drop_probability: 0.05   # chance a report is dropped, 0..1
+  segment_s: 10.0          # segment length, s (> 0)
+  gap_s: 3.0               # gap between segments, s (>= 0)
+  fps: 25.0                # video frame rate (> 0)
+  resolution: [1296, 972]  # video size, px
