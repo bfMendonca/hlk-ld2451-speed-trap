@@ -105,7 +105,7 @@ class RecordedSessionSource:
     def _assign_scans(
         self, all_frames: list[Frame], cfg: RadarConfig
     ) -> dict[tuple[int, int], list[RadarScan]]:
-        """Group radar scans (t = t_rx - latency - clock_offset) by the first frame at or after their time."""
+        """Group scans (t = t_rx - latency - clock_offset) by the first frame at or after them."""
         shift = int(self._session.metadata.get("radar_latency_ns") or 0) + int(
             cfg.clock_offset_ms * 1e6
         )
