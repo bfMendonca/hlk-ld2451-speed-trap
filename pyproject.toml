@@ -19,6 +19,7 @@ dependencies = [
     "supervision>=0.25",
     "ld2451",
     "radar-cam-recorder",
+    "trackers>=2.6",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
