@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
@@ -65,9 +66,9 @@ def test_clock_offset_shifts_scans(synth_session: Path) -> None:
         for b in RecordedSessionSource(synth_session, RadarConfig(clock_offset_ms=50.0))
         for s in b.scans
     ]
-    # Formula in the brief: t = t_rx + latency + clock_offset_ms * 1e6 (so +50 ms is later).
-    assert shifted and set(shifted) & {t + 50_000_000 for t in base}
-    assert min(shifted) == min(base) + 50_000_000
+    # Formula in the brief: t = t_rx - latency - clock_offset_ms * 1e6 (so +50 ms is earlier).
+    assert shifted and set(shifted) & {t - 50_000_000 for t in base}
+    assert min(shifted) == min(base) - 50_000_000
 
 
 def test_approaching_byte_flips_direction(synth_session: Path) -> None:
@@ -138,3 +139,13 @@ def test_wall_time_from_clock_samples(tmp_path: Path, synth_session: Path) -> No
     b = list(RecordedSessionSource(s, RadarConfig()))
     assert b[0].wall_time_ns == 1792562400000000000
     assert b[1].wall_time_ns == 1792562400040000000
+
+
+def test_radar_latency_is_subtracted(tmp_path: Path, synth_session: Path) -> None:
+    s = copy_session(synth_session, tmp_path)
+    meta = json.loads((s / "session.json").read_text())
+    meta["radar_latency_ns"] = 20_000_000
+    (s / "session.json").write_text(json.dumps(meta))
+    base = [t.t_ns for b in RecordedSessionSource(synth_session, RadarConfig()) for t in b.scans]
+    lat = [t.t_ns for b in RecordedSessionSource(s, RadarConfig()) for t in b.scans]
+    assert min(lat) == min(base) - 20_000_000

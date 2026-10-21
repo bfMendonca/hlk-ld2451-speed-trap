@@ -105,14 +105,14 @@ class RecordedSessionSource:
     def _assign_scans(
         self, all_frames: list[Frame], cfg: RadarConfig
     ) -> dict[tuple[int, int], list[RadarScan]]:
-        """Group shifted radar scans by the first frame at or after their time."""
+        """Group radar scans (t = t_rx - latency - clock_offset) by the first frame at or after their time."""
         shift = int(self._session.metadata.get("radar_latency_ns") or 0) + int(
             cfg.clock_offset_ms * 1e6
         )
         scans: list[RadarScan] = []
         if (self.path / "radar").is_dir():
             for report in self._session.radar_reports():
-                t_ns = report.t_rx_ns + shift
+                t_ns = report.t_rx_ns - shift
                 targets = tuple(
                     RadarTarget(
                         t_ns=t_ns,
