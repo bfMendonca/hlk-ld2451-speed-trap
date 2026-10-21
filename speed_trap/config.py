@@ -109,7 +109,7 @@ class RoadConfig(_Strict):
 
 
 class DetectorConfig(_Strict):
-    backend: Literal["rfdetr", "ultralytics"] = "rfdetr"
+    backend: Literal["rfdetr", "ultralytics", "ground_truth"] = "rfdetr"
     weights: str = "rfdetr-small"
     device: str = "mps"
     imgsz: int = Field(960, ge=32)

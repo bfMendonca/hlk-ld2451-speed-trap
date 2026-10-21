@@ -68,5 +68,5 @@ mypy_path = ["../driver-hlk-ld2451", "../radar-cam-recorder"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["serial", "serial.*"]
+module = ["serial", "serial.*", "ultralytics", "ultralytics.*"]
 ignore_missing_imports = true
