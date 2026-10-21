@@ -83,6 +83,21 @@ def gate_cost(
     return ratio_r**2 + ratio_az**2
 
 
+def radar_match(
+    radar: RadarModel, speed: SpeedConfig, road: RoadConfig, target: RadarTarget
+) -> RadarMatch:
+    """Radar target -> RadarMatch, applying the optional cosine correction to its speed."""
+    target_xy = radar.target_to_road(target.angle_deg, target.distance_m)
+    kmh = float(target.speed_kmh)
+    if speed.cosine_correction:
+        dx = target_xy[0] - radar.position_xy[0]
+        dy = target_xy[1] - radar.position_xy[1]
+        los = math.atan2(dy, dx)
+        cosine = abs(math.cos(los - math.radians(road.lane_heading_deg)))
+        kmh /= max(cosine, _MIN_COSINE)
+    return RadarMatch(target.t_ns, target, target_xy, kmh, target.speed_kmh)
+
+
 class Fusion:
     def __init__(
         self,
@@ -224,15 +239,4 @@ class Fusion:
             self._append_match(tracks[i], sc.targets[j])
 
     def _append_match(self, t: FusedTrack, target: RadarTarget) -> None:
-        target_xy = self._radar.target_to_road(target.angle_deg, target.distance_m)
-        speed = float(target.speed_kmh)
-        if self._speed.cosine_correction:
-            speed /= max(self._cosine(target_xy), _MIN_COSINE)
-        t.matches.append(RadarMatch(target.t_ns, target, target_xy, speed, target.speed_kmh))
-
-    def _cosine(self, target_xy: tuple[float, float]) -> float:
-        """|cos| of the ground-plane angle between the radar line of sight and the lane."""
-        dx = target_xy[0] - self._radar.position_xy[0]
-        dy = target_xy[1] - self._radar.position_xy[1]
-        los = math.atan2(dy, dx)
-        return abs(math.cos(los - math.radians(self._road.lane_heading_deg)))
+        t.matches.append(radar_match(self._radar, self._speed, self._road, target))
