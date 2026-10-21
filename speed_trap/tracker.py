@@ -49,6 +49,7 @@ class Tracker:
         self._epoch = 0
         self._next_id = 1
         self._ids: dict[tuple[int, int], int] = {}
+        self._keys: dict[int, tuple[int, int]] = {}
         self._tracks: dict[int, _Track] = {}
         self._class_ids: dict[str, int] = {}
         self._class_names: list[str] = []
@@ -58,8 +59,6 @@ class Tracker:
         finished: list[int] = []
         if self._prev_ts is not None and ts_ns - self._prev_ts > self._lost_ns:
             finished += self.finish_all()
-            self._bt.reset()
-            self._epoch += 1
         self._prev_ts = ts_ns
 
         active: list[TrackObservation] = []
@@ -92,12 +91,17 @@ class Tracker:
     def finish_all(self) -> list[int]:
         done = sorted(self._tracks)
         self._tracks.clear()
+        self._ids.clear()
+        self._keys.clear()
+        self._bt.reset()
+        self._epoch += 1
         return done
 
     def _public_id(self, sv_id: int) -> int:
         key = (self._epoch, sv_id)
         if key not in self._ids:
             self._ids[key] = self._next_id
+            self._keys[self._next_id] = key
             self._next_id += 1
         return self._ids[key]
 
@@ -105,6 +109,8 @@ class Tracker:
         gone = [t for t, tr in self._tracks.items() if ts_ns - tr.last_seen_ns > self._lost_ns]
         for t in gone:
             del self._tracks[t]
+            # A ByteTrack track that outlives our expiry gets a fresh public id.
+            del self._ids[self._keys.pop(t)]
         return gone
 
     def _to_sv(self, detections: list[Detection]) -> sv.Detections:

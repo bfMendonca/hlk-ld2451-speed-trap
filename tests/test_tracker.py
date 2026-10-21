@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import numpy as np
+import supervision as sv
+
 from speed_trap.config import TrackerConfig
 from speed_trap.tracker import Tracker, TrackerOutput
 from speed_trap.types import Detection
@@ -62,13 +65,15 @@ def test_none_detections_hold_last_box() -> None:
 
 def test_lost_track_finishes_after_timeout() -> None:
     tracker = make()
+    lost_ns = TrackerConfig().lost_track_s * 1e9
     run_frames(tracker, 10)
     finished: list[int] = []
     for i in range(10, 10 + 60):
         t = i * DT
         finished += tracker.update([], t).finished
         if finished:
-            assert t - 9 * DT <= (1.5 + 0.04 * 2) * 1e9
+            elapsed = t - 9 * DT
+            assert lost_ns < elapsed <= lost_ns + 2 * DT
             break
     assert len(finished) == 1
 
@@ -81,3 +86,31 @@ def test_majority_class_and_finish_all() -> None:
     tid = out.active[0].track_id
     assert tracker.finish_all() == [tid]
     assert tracker.finish_all() == []
+
+
+class _StickyByteTrack:
+    """Stub that keeps reporting sv id 0, like a ByteTrack that outlives wrapper expiry."""
+
+    def update(self, dets: sv.Detections, timestamp: float | None = None) -> sv.Detections:
+        if len(dets) == 0:
+            return sv.Detections.empty()
+        dets.tracker_id = np.zeros(len(dets), dtype=int)
+        return dets
+
+    def reset(self) -> None:
+        pass
+
+
+def test_expired_id_never_returns() -> None:
+    tracker = make()
+    tracker._bt = _StickyByteTrack()  # type: ignore[assignment]
+    a = tracker.update([box_at(10.0)], 0).active[0].track_id
+    finished: list[int] = []
+    t = DT
+    for _ in range(50):  # skipped frames past lost_track_s
+        finished += tracker.update(None, t).finished
+        t += DT
+    assert a in finished
+    out = tracker.update([box_at(10.0)], t)
+    assert out.active[0].track_id != a
+    assert tracker.update([box_at(10.0)], t + DT).active[0].track_id == out.active[0].track_id
