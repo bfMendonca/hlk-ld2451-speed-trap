@@ -1,0 +1,289 @@
+from __future__ import annotations
+
+import itertools
+import math
+
+import numpy as np
+import pytest
+
+from speed_trap.config import FusionConfig, RoadConfig, SpeedConfig
+from speed_trap.fusion import FusedTrack, Fusion, gate_cost
+from speed_trap.geometry import CameraModel, RadarModel, nominal_matrix
+from speed_trap.types import RadarScan, RadarTarget, TrackObservation
+
+W, H = 1296, 972
+
+
+def make_camera() -> CameraModel:
+    return CameraModel(nominal_matrix(W, H), np.zeros(5), W, H, 3.5, 12.0, 0.0, 0.0)
+
+
+def make_radar() -> RadarModel:
+    return RadarModel((0.0, 0.0), 3.5, 0.0, 1, 20.0, 1.0, 100.0)
+
+
+def fusion(
+    fusion_cfg: FusionConfig | None = None,
+    speed: SpeedConfig | None = None,
+    road: RoadConfig | None = None,
+) -> Fusion:
+    return Fusion(
+        make_camera(),
+        make_radar(),
+        fusion_cfg or FusionConfig(),
+        speed or SpeedConfig(),
+        road or RoadConfig(),
+    )
+
+
+def ts(seconds: float) -> int:
+    return round(seconds * 1e9)
+
+
+def box_at_road(x: float, y: float) -> tuple[float, float, float, float]:
+    uv, ok = make_camera().project(np.array([[x, y, 0.0]]))
+    assert ok[0]
+    u, v = float(uv[0][0]), float(uv[0][1])
+    return (u - 20.0, v - 30.0, u + 20.0, v)
+
+
+_ids = itertools.count(1)
+
+
+def obs_at_road(x: float, y: float, track_id: int | None = None) -> TrackObservation:
+    tid = track_id if track_id is not None else next(_ids)
+    return TrackObservation(tid, box_at_road(x, y), 0.9, "car", True)
+
+
+def target(
+    angle: int = 0, dist: int = 20, approaching: bool = True, speed: int = 40, t_ns: int = 0
+) -> RadarTarget:
+    return RadarTarget(t_ns, angle, dist, approaching, speed, 10, 0)
+
+
+def scan(*targets: RadarTarget, t_ns: int | None = None) -> RadarScan:
+    t = t_ns if t_ns is not None else (targets[0].t_ns if targets else 0)
+    return RadarScan(t, tuple(targets))
+
+
+def track(f: Fusion, track_id: int = 1) -> FusedTrack:
+    return f.tracks[track_id]
+
+
+def test_obs_helper_backprojects_exactly() -> None:
+    x0, _, x1, y1 = box_at_road(20, 1.5)
+    xy = make_camera().backproject_ground((x0 + x1) / 2, y1)
+    assert xy == pytest.approx((20, 1.5), abs=1e-6)
+
+
+def test_single_track_matches() -> None:
+    f = fusion()
+    t = obs_at_road(20, 0)
+    tracks = f.update([t], [scan(target(angle=0, dist=20, approaching=True, speed=50))], ts(0))
+    m = tracks[0].last_match
+    assert m is not None
+    assert m.speed_raw_kmh == 50
+    assert m.speed_kmh == 50
+    assert m.road_xy == pytest.approx(make_radar().target_to_road(0, 20))
+    assert tracks[0].road_xy == pytest.approx((20, 0), abs=1e-6)
+    assert tracks[0].subject_id == t.track_id
+
+
+def test_two_nearby_tracks_are_ambiguous() -> None:
+    tracks = fusion().update(
+        [obs_at_road(20, 0.15), obs_at_road(20, -0.15)], [scan(target(0, 20))], ts(0)
+    )
+    assert all(t.last_match is None for t in tracks)
+
+
+def test_two_nearby_targets_are_ambiguous() -> None:
+    tracks = fusion().update([obs_at_road(20, 0)], [scan(target(0, 20), target(0, 21))], ts(0))
+    # Δr 0.31 vs 0.71 m: costs 0.012 vs 0.064 -> clearly distinct, kept
+    assert tracks[0].last_match is not None
+    # 20.2 m sits halfway between the 19.69 m and 20.71 m ground ranges: equal costs
+    tracks = fusion().update([obs_at_road(20.2, 0)], [scan(target(0, 20), target(0, 21))], ts(0))
+    assert tracks[0].last_match is None
+
+
+def test_other_lane_track_does_not_steal_match() -> None:
+    tracks = fusion().update(
+        [obs_at_road(20, 0), obs_at_road(20, -3.5)], [scan(target(0, 20))], ts(0)
+    )
+    assert [t.last_match is not None for t in tracks] == [True, False]
+
+
+def test_lane_boundaries_reject_cross_lane_pairs() -> None:
+    # track just right of the 0.0 boundary, target just left of it: inside the gate
+    lanes = FusionConfig(lanes=[-3.5, 0.0, 3.5])
+    tracks = fusion(lanes).update([obs_at_road(20, -0.1)], [scan(target(1, 20))], ts(0))
+    assert tracks[0].last_match is None
+    tracks = fusion().update([obs_at_road(20, -0.1)], [scan(target(1, 20))], ts(0))
+    assert tracks[0].last_match is not None
+
+
+def test_beyond_max_range_never_matches() -> None:
+    assert fusion().update([obs_at_road(40, 0)], [scan(target(0, 40))], ts(0))[0].last_match is None
+
+
+def test_direction_disagreement_rejected() -> None:
+    f = fusion()
+    f.update([obs_at_road(30, 0, track_id=1)], [], ts(0))
+    tr = f.update(
+        [obs_at_road(25, 0, track_id=1)],
+        [scan(target(0, 25, approaching=False, t_ns=ts(0.5)))],
+        ts(0.5),
+    )[0]
+    assert tr.last_match is None
+
+
+def test_direction_agreement_accepted() -> None:
+    f = fusion()
+    f.update([obs_at_road(30, 0, track_id=1)], [], ts(0))
+    tr = f.update(
+        [obs_at_road(25, 0, track_id=1)],
+        [scan(target(0, 25, approaching=True, t_ns=ts(0.5)))],
+        ts(0.5),
+    )[0]
+    assert tr.last_match is not None
+
+
+def test_going_track_rejects_approaching_target() -> None:
+    f = fusion()
+    f.update([obs_at_road(20, 0, track_id=1)], [], ts(0))
+    tr = f.update(
+        [obs_at_road(25, 0, track_id=1)],
+        [scan(target(0, 25, approaching=True, t_ns=ts(0.4)))],
+        ts(0.4),
+    )[0]
+    assert tr.last_match is None
+
+
+def test_small_motion_leaves_direction_unknown() -> None:
+    f = fusion()
+    f.update([obs_at_road(20.0, 0, track_id=1)], [], ts(0))
+    tr = f.update(
+        [obs_at_road(20.3, 0, track_id=1)],
+        [scan(target(0, 20, approaching=False, t_ns=ts(0.4)))],
+        ts(0.4),
+    )[0]
+    assert tr.last_match is not None
+
+
+def test_reliability_needs_two_matches_and_expires() -> None:
+    f = fusion()
+    o = obs_at_road(20, 0, track_id=1)
+    f.update([o], [scan(target(0, 20, t_ns=ts(0)))], ts(0))
+    assert not track(f).reliable
+    assert track(f).direction is None
+    f.update([o], [scan(target(0, 20, t_ns=ts(0.1)))], ts(0.1))
+    assert track(f).reliable
+    assert track(f).reliable_ever
+    assert track(f).direction == "coming"
+    f.update([o], [], ts(1.7))
+    assert not track(f).reliable and track(f).last_match is not None
+    assert track(f).reliable_ever
+    assert track(f).direction == "coming"  # unchanged; renderer draws gray
+
+
+def test_reliable_direction_going() -> None:
+    f = fusion()
+    o = obs_at_road(20, 0, track_id=1)
+    for i in range(2):
+        f.update([o], [scan(target(0, 20, approaching=False, t_ns=ts(i * 0.1)))], ts(i * 0.1))
+    assert track(f).reliable
+    assert track(f).direction == "going"
+
+
+def test_box_above_horizon_has_no_road_point_and_no_match() -> None:
+    f = fusion()
+    obs = TrackObservation(1, (600.0, 10.0, 700.0, 50.0), 0.9, "car", True)
+    tr = f.update([obs], [scan(target(0, 20))], ts(0))[0]
+    assert tr.road_xy is None
+    assert tr.last_match is None
+    assert len(tr.road_history) == 0
+
+
+def test_cosine_correction_off_by_default_and_capped() -> None:
+    o = obs_at_road(20, 0, track_id=1)
+    road = RoadConfig(lane_heading_deg=70.0)
+    tr = fusion(road=road).update([o], [scan(target(0, 20, speed=50))], ts(0))[0]
+    assert tr.last_match is not None
+    assert tr.last_match.speed_kmh == 50
+    on = SpeedConfig(cosine_correction=True)
+    tr = fusion(speed=on, road=road).update([o], [scan(target(0, 20, speed=50))], ts(0))[0]
+    assert tr.last_match is not None
+    assert tr.last_match.speed_raw_kmh == 50
+    assert tr.last_match.speed_kmh == pytest.approx(50 / 0.5)
+
+
+def test_cosine_correction_uncapped_small_angle() -> None:
+    o = obs_at_road(20, 0, track_id=1)
+    on = SpeedConfig(cosine_correction=True)
+    tr = fusion(speed=on, road=RoadConfig(lane_heading_deg=30.0)).update(
+        [o], [scan(target(0, 20, speed=50))], ts(0)
+    )[0]
+    assert tr.last_match is not None
+    assert tr.last_match.speed_kmh == pytest.approx(50 / math.cos(math.radians(30)))
+    # going lane: heading 180 deg is the same line of travel, correction is 1
+    tr = fusion(speed=on, road=RoadConfig(lane_heading_deg=180.0)).update(
+        [o], [scan(target(0, 20, speed=50))], ts(0)
+    )[0]
+    assert tr.last_match is not None
+    assert tr.last_match.speed_kmh == pytest.approx(50)
+
+
+def test_gate_widens_with_distance() -> None:
+    radar, cfg = make_radar(), FusionConfig()
+    assert gate_cost(radar, cfg, (28, 0), target(0, 30)) is not None  # Δr ≈ 1.8 m, gate ≈ 3.6 m
+    assert gate_cost(radar, cfg, (8, 0), target(0, 11)) is None  # Δr ≈ 2.4 m, gate ≈ 2.1 m
+
+
+def test_gate_cost_values() -> None:
+    radar, cfg = make_radar(), FusionConfig()
+    g = math.sqrt(30**2 - 3.5**2)
+    gate_r = 1.5 + 0.002 * 28**2 + 0.5
+    assert gate_cost(radar, cfg, (28, 0), target(0, 30)) == pytest.approx(((g - 28) / gate_r) ** 2)
+    # angle gate is 1.5 deg
+    y = 20 * math.tan(math.radians(1.6))
+    assert gate_cost(radar, cfg, (20, y), target(0, 20)) is None
+    y = 20 * math.tan(math.radians(1.4))
+    assert gate_cost(radar, cfg, (20, y), target(0, 20)) is not None
+    # target beyond max range even though track is inside
+    assert gate_cost(radar, cfg, (29.5, 0), target(0, 31)) is None
+
+
+def test_track_history_and_speed_stats() -> None:
+    f = fusion()
+    o = obs_at_road(20, 0, track_id=1)
+    f.update([o], [scan(target(0, 20, speed=40, t_ns=ts(0)))], ts(0))
+    f.update([o], [scan(target(0, 20, speed=50, t_ns=ts(0.1)))], ts(0.1))
+    tr = track(f)
+    assert tr.max_speed_kmh == 50
+    assert tr.mean_speed_kmh == pytest.approx(45)
+    assert [t for t, _ in tr.boxes] == [ts(0), ts(0.1)]
+    assert tr.first_ts_ns == ts(0) and tr.last_ts_ns == ts(0.1)
+    assert len(tr.road_history) == 2
+
+
+def test_road_history_bounded_in_time() -> None:
+    f = fusion()
+    for i in range(50):
+        f.update([obs_at_road(20, 0, track_id=1)], [], ts(i * 0.1))
+    hist = track(f).road_history
+    assert hist[-1][0] - hist[0][0] <= ts(4 * 0.5)
+    assert len(hist) <= 21
+
+
+def test_unmatched_track_has_no_speed() -> None:
+    tr = fusion().update([obs_at_road(20, 0)], [], ts(0))[0]
+    assert tr.last_match is None
+    assert tr.max_speed_kmh is None and tr.mean_speed_kmh is None
+    assert not tr.reliable and tr.direction is None
+
+
+def test_finish_returns_and_removes() -> None:
+    f = fusion()
+    f.update([obs_at_road(20, 0, track_id=7), obs_at_road(15, 3, track_id=8)], [], ts(0))
+    done = f.finish([7, 99])
+    assert [t.track_id for t in done] == [7]
+    assert 7 not in f.tracks and 8 in f.tracks
