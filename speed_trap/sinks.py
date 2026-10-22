@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Iterable, Sequence
 from datetime import datetime, timezone
 from fractions import Fraction
@@ -106,8 +107,10 @@ def _match_json(m: RadarMatch) -> dict[str, Any]:
 class TracksSink:
     """tracks.jsonl: one line per finished subject.
 
-    ``road`` is built from the matches' ``road_xy`` (the full radar-time history), not from
-    ``FusedTrack.road_history``, which is trimmed to a short window for speed estimation.
+    ``boxes`` holds the detected boxes only (boxes predicted on skipped detector frames are
+    not logged). ``road`` holds one entry per box: ``[ts_ns, x, y]`` back-projected from the
+    box, or null where back-projection fails (radar subjects: empty). ``radar_road`` holds
+    the radar-derived road positions of the matches.
     """
 
     def __init__(self, path: Path) -> None:
@@ -118,6 +121,11 @@ class TracksSink:
         for s in finished:
             is_track = isinstance(s, FusedTrack)
             boxes = [[t, *b] for t, b in s.boxes] if isinstance(s, FusedTrack) else []
+            road = (
+                [None if xy is None else [t, *xy] for t, xy in s.road_points]
+                if isinstance(s, FusedTrack)
+                else []
+            )
             if isinstance(s, FusedTrack):
                 first, last = s.first_ts_ns, s.last_ts_ns
             else:
@@ -133,7 +141,8 @@ class TracksSink:
                 "max_speed_kmh": s.max_speed_kmh,
                 "mean_speed_kmh": s.mean_speed_kmh,
                 "boxes": boxes,
-                "road": [[m.t_ns, *m.road_xy] for m in s.matches],
+                "road": road,
+                "radar_road": [[m.t_ns, *m.road_xy] for m in s.matches],
                 "matches": [_match_json(m) for m in s.matches],
             }
             self._fh.write(json.dumps(rec) + "\n")
@@ -188,7 +197,8 @@ class CaptureSink:
             if crop.size == 0:
                 continue
             self._dir.mkdir(parents=True, exist_ok=True)
-            stem = f"{ev.capture.segment:04d}_t{ev.subject_id}_{ev.speed_max_kmh:.0f}kmh"
+            kmh = math.floor(ev.speed_max_kmh)  # never rounds a speed up
+            stem = f"{ev.capture.segment:04d}_t{ev.subject_id}_{kmh}kmh"
             jpg, side = self._dir / f"{stem}.jpg", self._dir / f"{stem}.json"
             params = [cv2.IMWRITE_JPEG_QUALITY, self._cfg.jpeg_quality]
             _imwrite(jpg, crop, params)
@@ -257,9 +267,12 @@ def write_run_info(
     started_ns: int,
     finished_ns: int,
     warnings: list[str],
+    *,
+    model: str | None,
     error: str | None = None,
 ) -> None:
-    """Write run.json; ``error`` (only present when given) records a run that failed."""
+    """Write run.json; ``model`` is null in lite mode; ``error`` (only present when given)
+    records a run that failed."""
     versions: dict[str, str] = {}
     for dist in ("speed_trap", "ld2451", "radar_cam_recorder", "rfdetr", "ultralytics"):
         v = _version(dist) or _version(dist.replace("_", "-"))
@@ -269,7 +282,7 @@ def write_run_info(
         "config": json.loads(cfg.model_dump_json()),
         "config_hash": config_hash(cfg),
         "versions": versions,
-        "model": cfg.detector.weights,
+        "model": model,
         "session_path": str(session_path),
         "started_ns": started_ns,
         "finished_ns": finished_ns,

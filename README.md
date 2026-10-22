@@ -150,7 +150,7 @@ Under `--out` (default `out/<session_id>/`):
 | File | Content |
 | --- | --- |
 | `NNNN.overlay.mp4` | annotated H.264 video per segment, variable frame rate from the frame timestamps, so playback runs in real time despite dropped frames |
-| `tracks.jsonl` | one line per finished track (or radar subject in lite mode): id, class, first/last time, direction, boxes, road positions, radar matches, `reliable_ever`, max/mean speed |
+| `tracks.jsonl` | one line per finished track (or radar subject in lite mode): id, class, first/last time, direction, detected boxes, `road` (per-box back-projected road position, null where it fails), `radar_road` (radar road positions of the matches), radar matches, `reliable_ever`, max/mean speed |
 | `captures/NNNN_t<id>_<speed>kmh.jpg` | full-resolution crop of the vehicle, without overlay (lite mode: the overlay frame) |
 | `captures/NNNN_t<id>_<speed>kmh.json` | sidecar: direction, limit, speed max/mean/at capture, frame index, sensor timestamp, wall-clock time (flagged unreliable without NTP), box, detector confidence, the full radar history, config hash |
 | `run.json` | effective config and its hash, package versions, model, session path, start/end time, counters (frames, scans, tracks, matches, captures), warnings, and `error` if the run failed |

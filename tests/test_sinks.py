@@ -78,6 +78,7 @@ def test_video_sink_one_file_per_segment(tmp_path: Path) -> None:
 def test_tracks_sink_one_line_per_subject(tmp_path: Path) -> None:
     track = FusedTrack(7, "car", (10, 20, 110, 90), 0.9, 0, 3 * MS)
     track.boxes = [(0, (10.0, 20.0, 110.0, 90.0)), (MS, (12.0, 20.0, 112.0, 90.0))]
+    track.road_points = [(0, (5.0, 1.0)), (MS, None)]
     track.matches = [mk(1), mk(2, 50.0)]
     track.reliable_ever = True
     track.direction = "coming"
@@ -94,7 +95,8 @@ def test_tracks_sink_one_line_per_subject(tmp_path: Path) -> None:
     assert a["first_ts_ns"] == 0 and a["last_ts_ns"] == 3 * MS and a["reliable_ever"] is True
     assert a["max_speed_kmh"] == 50.0 and a["mean_speed_kmh"] == 47.5
     assert a["boxes"][1] == [MS, 12.0, 20.0, 112.0, 90.0]
-    assert a["road"] == [[MS, 21.0, 1.0], [2 * MS, 22.0, 1.0]]
+    assert a["road"] == [[0, 5.0, 1.0], None]  # per box, null where back-projection fails
+    assert a["radar_road"] == [[MS, 21.0, 1.0], [2 * MS, 22.0, 1.0]]
     assert a["matches"][0] == {
         "t_ns": MS,
         "speed_kmh": 45.0,
@@ -105,7 +107,8 @@ def test_tracks_sink_one_line_per_subject(tmp_path: Path) -> None:
         "approaching": True,
     }
     assert (b["id"], b["kind"], b["class"], b["boxes"]) == (3, "radar", None, [])
-    assert b["first_ts_ns"] == MS and b["last_ts_ns"] == MS and b["road"] == [[MS, 21.0, 1.0]]
+    assert b["first_ts_ns"] == MS and b["last_ts_ns"] == MS and b["road"] == []
+    assert b["radar_road"] == [[MS, 21.0, 1.0]]
 
 
 def event(
@@ -221,7 +224,14 @@ def test_run_info_contains_hash_and_counters(tmp_path: Path) -> None:
     cfg = Config()
     path = tmp_path / "run.json"
     write_run_info(
-        path, cfg, Path("/data/session"), {"frames": 10, "tracks": 2}, 1, 2_000_000_001, ["w"]
+        path,
+        cfg,
+        Path("/data/session"),
+        {"frames": 10, "tracks": 2},
+        1,
+        2_000_000_001,
+        ["w"],
+        model="rfdetr-small",
     )
     d = json.loads(path.read_text())
     assert d["config_hash"] == config_hash(cfg)
@@ -229,7 +239,9 @@ def test_run_info_contains_hash_and_counters(tmp_path: Path) -> None:
     assert d["counters"] == {"frames": 10, "tracks": 2}
     assert d["warnings"] == ["w"] and d["session_path"] == "/data/session"
     assert d["started_ns"] == 1 and d["finished_ns"] == 2_000_000_001
-    assert d["model"] == cfg.detector.weights
+    assert d["model"] == "rfdetr-small"
+    write_run_info(path, cfg, Path("/s"), {}, 1, 2, [], model=None)  # lite mode
+    assert json.loads(path.read_text())["model"] is None
     assert "speed_trap" in d["versions"] and "ld2451" in d["versions"]
 
 
@@ -252,3 +264,13 @@ def test_video_sink_rejects_bad_shapes(tmp_path: Path) -> None:
 def test_video_sink_rejects_unknown_codec(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="codec"):
         VideoSink(tmp_path, 64, 48, codec="vp9")
+
+
+def test_capture_filename_floors_the_speed(tmp_path: Path) -> None:
+    sink = capture_sink(tmp_path)
+    raw = np.zeros((480, 640, 3), np.uint8)
+    ev = event()
+    ev = CaptureEvent(1, "coming", 40.0, 47.6, 44.0, 46.0, ev.capture, 0.8, ev.history)
+    sink.offer([ev.capture], raw, raw, None)
+    sink.write([ev])
+    assert (tmp_path / "captures" / "0002_t1_47kmh.jpg").exists()

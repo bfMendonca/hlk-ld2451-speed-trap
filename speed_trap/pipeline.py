@@ -151,6 +151,7 @@ class Pipeline:
             started_ns,
             time.time_ns(),
             self.warnings,
+            model=self._model_name(),
             error=error,
         )
 

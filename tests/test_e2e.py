@@ -134,6 +134,7 @@ def test_lite_end_to_end(tmp_path: Path, synth_session: Path, cfg_file: Path) ->
     assert run["counters"]["scans"] > 0
     assert any("intrinsics" in w for w in run["warnings"])
     assert "error" not in run
+    assert run["model"] is None
 
 
 def test_full_end_to_end_with_truth_detector(
