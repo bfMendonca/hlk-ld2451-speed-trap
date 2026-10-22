@@ -180,11 +180,11 @@ def test_lite_pillar_drawn_at_radar_point() -> None:
     assert near_color(out[v - 10, u], "#ffffff", 60)
 
 
-def _pillar_mid_changed(r: Renderer, distance: int) -> bool:
+def _pillar_mid_changed(r: Renderer, distance: int, mode: str = "full") -> bool:
     tg = RadarTarget(NS, 0, distance, True, 50, 70, 0)
     img = gray_image()
-    base = render(r, img)
-    out = render(r, img, targets=[tg])
+    base = render(r, img, mode=mode)
+    out = render(r, img, targets=[tg], mode=mode)
     xy = r._radar.target_to_road(0, distance)
     uv, front = r._camera.project(np.array([[*xy, 0.0], [*xy, 0.8]]))
     assert front.all()
@@ -199,6 +199,12 @@ def test_far_target_drawn_as_thin_pillar_without_label() -> None:
     assert not _pillar_mid_changed(r, 20)  # inside fusion range: no thin pillar
     assert not _pillar_mid_changed(Renderer(r._camera, r._radar, OverlayConfig(), LiteConfig(),
                                             far_range_m=50.0), 40)  # fmt: skip
+
+
+def test_lite_far_target_drawn_as_thin_pillar() -> None:
+    r = make_renderer()
+    assert _pillar_mid_changed(r, 40, mode="lite")
+    assert not _pillar_mid_changed(r, 20, mode="lite")  # near targets are linked subjects
 
 
 def test_hud_toggle_off_leaves_top_rows_untouched() -> None:

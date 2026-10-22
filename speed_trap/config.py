@@ -148,6 +148,8 @@ class FusionConfig(_Strict):
     lanes: list[float] | None = None
     direction_window_s: float = Field(0.5, gt=0)
     direction_min_travel_m: float = Field(0.5, ge=0)
+    speed_tolerance_kmh: float = Field(10.0, gt=0)
+    speed_tolerance_ratio: float = Field(0.3, gt=0, le=1)
     reliable_min_matches: int = Field(2, ge=1)
     reliable_max_age_s: float = Field(1.5, gt=0)
 
@@ -214,7 +216,7 @@ class LiteConfig(_Strict):
 
 
 class OutputConfig(_Strict):
-    video_codec: str = "h264"
+    video_codec: Literal["h264"] = "h264"
     dir: Path = Path("out")
 
 

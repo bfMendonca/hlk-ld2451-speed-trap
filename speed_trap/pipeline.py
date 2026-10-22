@@ -86,19 +86,28 @@ class Pipeline:
     # ------------------------------------------------------------------------------- run
 
     def run(self, progress: Progress | None = None) -> dict[str, int]:
-        cfg, src = self._cfg, self._source
         started_ns = time.time_ns()
-        self._video = VideoSink(self._out, src.width, src.height)
-        self._tracks_sink = TracksSink(self._out / "tracks.jsonl")
-        if cfg.capture.enabled:
-            self._captures = CaptureSink(
-                self._out, src.session_id, cfg.capture, src.ntp_synced, config_hash(cfg)
-            )
+        try:
+            self._run(progress)
+        except BaseException as e:  # incl. KeyboardInterrupt: leave a record of the partial run
+            self._write_run_info(started_ns, f"{type(e).__name__}: {e}")
+            raise
+        self._write_run_info(started_ns, None)
+        return dict(self._counters)
+
+    def _run(self, progress: Progress | None) -> None:
+        cfg, src = self._cfg, self._source
         n_warnings = len(src.warnings)
         seg: int | None = None
         seg_frames, seg_t0 = 0, time.perf_counter()
         t_prev = seg_t0
         try:
+            self._video = VideoSink(self._out, src.width, src.height, cfg.output.video_codec)
+            self._tracks_sink = TracksSink(self._out / "tracks.jsonl")
+            if cfg.capture.enabled:
+                self._captures = CaptureSink(
+                    self._out, src.session_id, cfg.capture, src.ntp_synced, config_hash(cfg)
+                )
             for bundle in src:
                 if bundle.segment != seg:
                     if seg is not None and progress is not None:
@@ -113,20 +122,24 @@ class Pipeline:
                 progress(seg, seg_frames, _rate(seg_frames, seg_t0))
             self._finish(self._finish_all())
         finally:
-            self._video.close()
-            self._tracks_sink.close()
-        for message in src.warnings[n_warnings:]:
-            self._warn(message)
+            if self._video is not None:
+                self._video.close()
+            if self._tracks_sink is not None:
+                self._tracks_sink.close()
+            for message in src.warnings[n_warnings:]:
+                self._warn(message)
+
+    def _write_run_info(self, started_ns: int, error: str | None) -> None:
         write_run_info(
             self._out / "run.json",
-            cfg,
-            src.path,
+            self._cfg,
+            self._source.path,
             dict(self._counters),
             started_ns,
             time.time_ns(),
             self.warnings,
+            error=error,
         )
-        return dict(self._counters)
 
     # ---------------------------------------------------------------------------- per frame
 

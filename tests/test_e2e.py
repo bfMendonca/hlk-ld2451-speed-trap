@@ -15,6 +15,7 @@ from speed_trap.cli import main
 from speed_trap.config import Config
 from speed_trap.pipeline import Pipeline
 from speed_trap.source import RecordedSessionSource
+from speed_trap.synth import COMING_LANE_Y, SynthVehicle, generate_session
 from speed_trap.types import Detection, FrameBundle
 
 Box = tuple[float, float, float, float]
@@ -132,6 +133,7 @@ def test_lite_end_to_end(tmp_path: Path, synth_session: Path, cfg_file: Path) ->
     )
     assert run["counters"]["scans"] > 0
     assert any("intrinsics" in w for w in run["warnings"])
+    assert "error" not in run
 
 
 def test_full_end_to_end_with_truth_detector(
@@ -218,3 +220,34 @@ def test_detector_runs_every_n_frames(tmp_path: Path, synth_session: Path) -> No
     assert counters["frames"] == frames
     assert det.calls == (frames + 2) // 3
     assert progress == [(1, frames)]
+
+
+@pytest.mark.parametrize(
+    "parked_xy",
+    [
+        pytest.param((25.0, 3.6), id="kerb-occluded"),
+        # Stress case: identical boxes while the car passes, so ByteTrack swaps ids.
+        pytest.param((20.0, COMING_LANE_Y), id="same-box"),
+    ],
+)
+def test_parked_car_overlapped_by_passing_car_never_gets_a_speed(
+    tmp_path: Path, cfg_file: Path, parked_xy: tuple[float, float]
+) -> None:
+    # 30 km/h: slow enough to overlap the parked car for several radar reports.
+    passing = SynthVehicle(1, "coming", COMING_LANE_Y, 30.0, 45.0, 0.5)
+    parked = SynthVehicle(2, None, parked_xy[1], 0.0, parked_xy[0], 0.0)
+    session = generate_session(tmp_path / "syn", Config(), 8.0, 1, vehicles=[passing, parked])
+    out = tmp_path / "out"
+    args = ["process", str(session), "--config", str(cfg_file), "--out", str(out), "--capture"]
+    assert main([*args, "--set", "speed.limit_kmh=25", *truth_detector(session)]) == 0
+
+    tracks = load_tracks(out / "tracks.jsonl")
+    parked_tracks = tracks_matching(session, tracks, 2)
+    assert parked_tracks
+    assert not any(t["reliable_ever"] for t in parked_tracks)
+    events = load_sidecars(out / "captures")
+    assert events
+    assert all(e["speed_kmh"]["max"] <= passing.speed_kmh + 1 for e in events)
+    for e in events:
+        box = tuple(e["capture"]["bbox_xyxy"])
+        assert truth_vehicle_at(session, e["segment"], e["capture"]["frame_index"], box) == 1

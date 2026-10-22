@@ -155,3 +155,8 @@ def test_frame_counts_follow_selection(synth_session: Path) -> None:
     src = RecordedSessionSource(synth_session, RadarConfig(), segments=[1], start_s=12.0)
     assert set(src.frame_counts) == {1}
     assert src.frame_counts[1] == len(list(src))
+
+
+def test_empty_selection_names_segment_ranges(synth_session: Path) -> None:
+    with pytest.raises(SourceError, match=r"no frames.*segment 0: 0\.0\.\.\d+\.\d s"):
+        RecordedSessionSource(synth_session, RadarConfig(), segments=[0], start_s=15.0)

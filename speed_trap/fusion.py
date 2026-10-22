@@ -1,7 +1,8 @@
 """Radar-track fusion: attach radar readings to tracked vehicles (spec §5.4-5.5).
 
 Safety first: a pair is only kept when it is inside a distance-aware gate, within
-``fusion.max_range_m``, consistent in direction and lane, and unambiguous. When in doubt,
+``fusion.max_range_m``, consistent in direction, lane and speed (once the track has a
+motion history), and unambiguous. When in doubt,
 no match. Never reads ahead in time; no I/O.
 """
 
@@ -125,8 +126,9 @@ class Fusion:
     ) -> list[FusedTrack]:
         current = [self._upsert(obs, ts_ns) for obs in observations]
         directions = [self._motion_direction(t, ts_ns) for t in current]
+        radials = [self._radial_kmh(t, ts_ns) for t in current]
         for sc in scans:
-            self._match_scan(current, directions, sc)
+            self._match_scan(current, directions, radials, sc)
         for t in current:
             self._update_reliability(t, ts_ns)
         return current
@@ -172,6 +174,20 @@ class Fusion:
             return "going"
         return None
 
+    def _radial_kmh(self, t: FusedTrack, ts_ns: int) -> float | None:
+        """Track's own radial (slant-range) speed, once it has ``direction_window_s`` of history."""
+        if t.road_xy is None or not t.road_history:
+            return None
+        cutoff = ts_ns - round(self._cfg.direction_window_s * 1e9)
+        older = [h for h in t.road_history if h[0] <= cutoff]
+        newest = t.road_history[-1]
+        if not older or newest[0] <= older[-1][0]:
+            return None
+        oldest = older[-1]
+        r0 = self._radar.slant_range(self._radar.road_to_polar(oldest[1], oldest[2])[0])
+        r1 = self._radar.slant_range(self._radar.road_to_polar(newest[1], newest[2])[0])
+        return abs(r1 - r0) / ((newest[0] - oldest[0]) / 1e9) * 3.6
+
     def _update_reliability(self, t: FusedTrack, ts_ns: int) -> None:
         last = t.last_match
         t.reliable = (
@@ -192,12 +208,22 @@ class Fusion:
         return bisect.bisect_right(self._lanes, lateral)
 
     def _pair_cost(
-        self, t: FusedTrack, direction: Direction | None, target: RadarTarget
+        self,
+        t: FusedTrack,
+        direction: Direction | None,
+        radial_kmh: float | None,
+        target: RadarTarget,
     ) -> float | None:
         if t.road_xy is None:
             return None
         if direction is not None and (direction == "coming") != target.approaching:
             return None
+        if radial_kmh is not None:
+            tol = max(
+                self._cfg.speed_tolerance_kmh, self._cfg.speed_tolerance_ratio * target.speed_kmh
+            )
+            if abs(radial_kmh - target.speed_kmh) > tol:
+                return None
         cost = gate_cost(self._radar, self._cfg, t.road_xy, target)
         if cost is None:
             return None
@@ -208,14 +234,18 @@ class Fusion:
         return cost
 
     def _match_scan(
-        self, tracks: list[FusedTrack], directions: list[Direction | None], sc: RadarScan
+        self,
+        tracks: list[FusedTrack],
+        directions: list[Direction | None],
+        radials: list[float | None],
+        sc: RadarScan,
     ) -> None:
         if not tracks or not sc.targets:
             return
         cost = np.full((len(tracks), len(sc.targets)), _INVALID)
-        for i, (t, d) in enumerate(zip(tracks, directions, strict=True)):
+        for i, (t, d, r) in enumerate(zip(tracks, directions, radials, strict=True)):
             for j, target in enumerate(sc.targets):
-                c = self._pair_cost(t, d, target)
+                c = self._pair_cost(t, d, r, target)
                 if c is not None:
                     cost[i, j] = c
         valid = cost < _INVALID

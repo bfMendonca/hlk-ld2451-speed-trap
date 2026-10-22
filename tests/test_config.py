@@ -105,3 +105,10 @@ def test_non_mapping_file_is_error(tmp_path: Path) -> None:
 def test_config_hash_stable_and_sensitive() -> None:
     assert config_hash(Config()) == config_hash(Config())
     assert config_hash(Config()) != config_hash(Config(speed={"limit_kmh": 41}))
+
+
+def test_video_codec_only_h264(tmp_path: Path) -> None:
+    p = tmp_path / "c.yaml"
+    p.write_text("output:\n  video_codec: h265\n")
+    with pytest.raises(ConfigError, match=r"output\.video_codec"):
+        load_config(p)

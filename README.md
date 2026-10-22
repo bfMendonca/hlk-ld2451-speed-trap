@@ -15,8 +15,8 @@ on a laptop and produces:
 
 The guiding rule is *near but never wrong*. A capture must never overstate a speed or attach
 a radar reading to the wrong vehicle. Radar readings are attached only within 30 m, only
-when the match is unambiguous and the direction agrees, and the raw radial speed (which reads
-slightly low) is used by default. When in doubt, the vehicle stays gray and no capture is made.
+when the match is unambiguous, and only when the direction and speed agree with the track's
+own motion. The raw radial speed (which reads slightly low) is used by default. When in doubt, the vehicle stays gray and no capture is made.
 
 ## How it works
 
@@ -35,7 +35,9 @@ Source ──► Detector ──► Tracker ──► Fusion ──► Speeding 
 - **Tracker** keeps one identity per vehicle (ByteTrack, timeouts in seconds).
 - **Fusion** places each box on the road plane (bottom-centre, back-projected through the
   camera model) and each radar target on the road from its range and angle, then assigns
-  them with the Hungarian algorithm inside distance-aware gates. A track becomes *reliable*
+  them with the Hungarian algorithm inside distance-aware gates. Once a track has been seen
+  long enough, its own radial speed must also agree with the radar's (so a parked car never
+  inherits the speed of a car passing in front of it). A track becomes *reliable*
   (colored) after enough recent matches.
 - **Speeding monitor** triggers when a reliable track exceeds the limit for several
   consecutive radar matches, keeps the best frame (largest box, not cut by the frame edge)
@@ -44,8 +46,9 @@ Source ──► Detector ──► Tracker ──► Fusion ──► Speeding 
 The core stages do no file I/O, decoding or drawing and never read ahead in time, so the
 same code can later run on a live stream.
 
-**Lite mode** skips the detector and tracker: each radar target is drawn as a pillar standing
-on the road at its reported range and angle. It runs fast on any machine, and it is the way to
+**Lite mode** skips the detector and tracker: each radar target within the fusion range is
+drawn as a labelled pillar standing on the road at its reported range and angle, linked across
+reports into one subject per vehicle; targets farther away are drawn as thin unlabelled pillars. It runs fast on any machine, and it is the way to
 check the camera–radar calibration.
 
 ## Install
@@ -110,7 +113,8 @@ speed-trap check-config --config cfg.yaml [--set ...]
 speed-trap synth OUT_DIR [--config cfg.yaml] [--duration S] [--seed N]
 ```
 
-Exit codes: `0` success, `1` runtime error, `2` usage, config or session error. Errors are one
+Exit codes: `0` success, `1` runtime error, `2` usage, config or session error, `130`
+interrupted. A failed run still writes `run.json`, with an `error` field. Errors are one
 line on stderr; `-vv` adds the traceback. Progress is printed per segment with frames/s and an
 ETA. Nothing is written until the config and the session have been validated.
 
@@ -145,7 +149,7 @@ Under `--out` (default `out/<session_id>/`):
 | `tracks.jsonl` | one line per finished track (or radar subject in lite mode): id, class, first/last time, direction, boxes, road positions, radar matches, `reliable_ever`, max/mean speed |
 | `captures/NNNN_t<id>_<speed>kmh.jpg` | full-resolution crop of the vehicle, without overlay (lite mode: the overlay frame) |
 | `captures/NNNN_t<id>_<speed>kmh.json` | sidecar: direction, limit, speed max/mean/at capture, frame index, sensor timestamp, wall-clock time (flagged unreliable without NTP), box, detector confidence, the full radar history, config hash |
-| `run.json` | effective config and its hash, package versions, model, session path, start/end time, counters (frames, scans, tracks, matches, captures), warnings |
+| `run.json` | effective config and its hash, package versions, model, session path, start/end time, counters (frames, scans, tracks, matches, captures), warnings, and `error` if the run failed |
 
 ## Calibration
 
@@ -172,8 +176,8 @@ Fusion is only as good as the geometry, so set it up before trusting full-mode c
 ## Known limits
 
 - **30 m fusion range.** Matching, colored tracks and captures stop at `fusion.max_range_m`.
-  In full mode, farther radar targets are drawn as thin markers but never attached to a
-  vehicle; lite mode ignores them. Widening it needs a
+  Farther radar targets are drawn as thin unlabelled pillars (in both modes) but never
+  attached to a vehicle or captured. Widening it needs a
   well-verified camera pose.
 - **Flat road.** Back-projection assumes the road is a plane; slopes and crowns shift the
   road positions and with them the gates.

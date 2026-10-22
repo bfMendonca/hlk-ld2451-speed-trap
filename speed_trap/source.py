@@ -88,6 +88,18 @@ class RecordedSessionSource:
             self._frames_by_segment[f.segment].append(f)
 
         selected = [f.sensor_ts_ns for fs in self._frames_by_segment.values() for f in fs]
+        if not selected:
+            ranges = []
+            for s in self.segments:
+                stamps = [f.sensor_ts_ns for f in all_frames if f.segment == s]
+                ranges.append(
+                    f"segment {s}: {(min(stamps) - first_ts) / _NS:.1f}.."
+                    f"{(max(stamps) - first_ts) / _NS:.1f} s"
+                )
+            raise SourceError(
+                "the selection has no frames (--start/--end outside the selected segments); "
+                + "; ".join(ranges)
+            )
         deltas = [b - a for a, b in itertools.pairwise(selected) if b > a]
         self.fps: float = _NS / statistics.median(deltas) if deltas else 0.0
 

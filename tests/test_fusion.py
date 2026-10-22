@@ -287,3 +287,52 @@ def test_finish_returns_and_removes() -> None:
     done = f.finish([7, 99])
     assert [t.track_id for t in done] == [7]
     assert 7 not in f.tracks and 8 in f.tracks
+
+
+def test_long_observed_stationary_track_rejects_moving_target() -> None:
+    f = fusion()
+    for i in range(6):  # 0.5 s without moving
+        f.update([obs_at_road(20, 0, track_id=1)], [], ts(i * 0.1))
+    tr = f.update(
+        [obs_at_road(20, 0, track_id=1)],
+        [scan(target(0, 20, approaching=True, speed=50, t_ns=ts(0.6)))],
+        ts(0.6),
+    )[0]
+    assert tr.last_match is None
+
+
+def test_speed_consistent_moving_track_matches() -> None:
+    f = fusion()
+    for i in range(6):  # 50 km/h toward the radar
+        f.update([obs_at_road(30 - 50 / 3.6 * i * 0.1, 0, track_id=1)], [], ts(i * 0.1))
+    x = 30 - 50 / 3.6 * 0.6
+    tr = f.update(
+        [obs_at_road(x, 0, track_id=1)],
+        [scan(target(0, round(make_radar().slant_range(x)), speed=48, t_ns=ts(0.6)))],
+        ts(0.6),
+    )[0]
+    assert tr.last_match is not None
+
+
+def test_speed_inconsistent_moving_track_rejected() -> None:
+    f = fusion()
+    for i in range(6):  # 20 km/h track vs a 50 km/h target
+        f.update([obs_at_road(30 - 20 / 3.6 * i * 0.1, 0, track_id=1)], [], ts(i * 0.1))
+    x = 30 - 20 / 3.6 * 0.6
+    tr = f.update(
+        [obs_at_road(x, 0, track_id=1)],
+        [scan(target(0, round(make_radar().slant_range(x)), speed=50, t_ns=ts(0.6)))],
+        ts(0.6),
+    )[0]
+    assert tr.last_match is None
+
+
+def test_short_history_track_is_not_speed_gated() -> None:
+    f = fusion()
+    f.update([obs_at_road(20, 0, track_id=1)], [], ts(0))
+    tr = f.update(
+        [obs_at_road(20, 0, track_id=1)],
+        [scan(target(0, 20, speed=50, t_ns=ts(0.3)))],
+        ts(0.3),
+    )[0]
+    assert tr.last_match is not None

@@ -247,3 +247,8 @@ def test_video_sink_rejects_bad_shapes(tmp_path: Path) -> None:
     sink = VideoSink(tmp_path, 320, 240)
     with pytest.raises(ValueError, match="shape"):
         sink.write(0, 0, np.zeros((100, 320, 3), np.uint8))
+
+
+def test_video_sink_rejects_unknown_codec(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="codec"):
+        VideoSink(tmp_path, 64, 48, codec="vp9")

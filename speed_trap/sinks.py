@@ -21,14 +21,18 @@ from speed_trap.monitor import Candidate, CaptureEvent
 from speed_trap.types import RadarMatch
 
 _NS_PER_MS = 1_000_000
+_ENCODERS = {"h264": "libx264"}  # output.video_codec -> FFmpeg encoder
 
 
 class VideoSink:
     """One H.264 file per segment with variable frame rate (pts in ms since segment start)."""
 
-    def __init__(self, out_dir: Path, width: int, height: int) -> None:
+    def __init__(self, out_dir: Path, width: int, height: int, codec: str = "h264") -> None:
         if width % 2 or height % 2:
             raise ValueError(f"video size must be even for yuv420p, got {width}x{height}")
+        if codec not in _ENCODERS:
+            raise ValueError(f"unsupported video codec {codec!r}; supported: {sorted(_ENCODERS)}")
+        self._encoder = _ENCODERS[codec]
         self._dir = Path(out_dir)
         self._width = width
         self._height = height
@@ -61,7 +65,7 @@ class VideoSink:
     def _open(self, segment: int, ts_ns: int) -> None:
         self._dir.mkdir(parents=True, exist_ok=True)
         self._container = av.open(str(self._dir / f"{segment:04d}.overlay.mp4"), mode="w")
-        stream = self._container.add_stream("libx264", rate=25)
+        stream = self._container.add_stream(self._encoder, rate=25)
         stream.width = self._width
         stream.height = self._height
         stream.pix_fmt = "yuv420p"
@@ -253,7 +257,9 @@ def write_run_info(
     started_ns: int,
     finished_ns: int,
     warnings: list[str],
+    error: str | None = None,
 ) -> None:
+    """Write run.json; ``error`` (only present when given) records a run that failed."""
     versions: dict[str, str] = {}
     for dist in ("speed_trap", "ld2451", "radar_cam_recorder", "rfdetr", "ultralytics"):
         v = _version(dist) or _version(dist.replace("_", "-"))
@@ -270,5 +276,7 @@ def write_run_info(
         "counters": counters,
         "warnings": warnings,
     }
+    if error is not None:
+        info["error"] = error
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(json.dumps(info, indent=2), encoding="utf-8")

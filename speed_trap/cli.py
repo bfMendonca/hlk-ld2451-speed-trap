@@ -17,7 +17,7 @@ from speed_trap.config import Config, ConfigError, default_config_text, load_con
 
 log = logging.getLogger("speed_trap")
 
-EXIT_OK, EXIT_RUNTIME, EXIT_USAGE = 0, 1, 2
+EXIT_OK, EXIT_RUNTIME, EXIT_USAGE, EXIT_INTERRUPTED = 0, 1, 2, 130
 
 
 class _UsageError(Exception):
@@ -197,7 +197,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return EXIT_USAGE
     except KeyboardInterrupt:
         print("speed-trap: interrupted", file=sys.stderr)
-        return EXIT_RUNTIME
+        return EXIT_INTERRUPTED
     except Exception as e:
         if verbose >= 2:
             traceback.print_exc()

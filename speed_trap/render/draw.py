@@ -313,10 +313,10 @@ class Renderer:
         if self._overlay.show.wedge:
             self._draw_wedge(out)
             texts.extend(self._ring_labels)
+        for tg in current_targets:  # beyond the fusion range: never linked, thin and unlabeled
+            if self._ground_range(tg) > self._far_range_m:
+                self._thin_pillar(out, tg)
         if hud.mode == "full":
-            for tg in current_targets:
-                if self._ground_range(tg) > self._far_range_m:
-                    self._thin_pillar(out, tg)
             for tr in sorted(tracks, key=lambda t: t.xyxy[3]):
                 self._draw_track(out, texts, tr, tr.subject_id in triggered, limit_for)
         else:

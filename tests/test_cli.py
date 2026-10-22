@@ -113,3 +113,54 @@ def test_lite_mode_does_not_import_torch(tmp_path: Path, synth_session: Path) ->
     )
     assert proc.returncode == 0, proc.stderr
     assert (out / "0001.overlay.mp4").exists()
+
+
+def test_empty_selection_exit_2_no_output_dir(
+    tmp_path: Path, synth_session: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    cfg_file = write_cfg(tmp_path)
+    out = tmp_path / "out"
+    args = ["process", str(synth_session), "--config", str(cfg_file), "--segment", "0"]
+    assert main([*args, "--start", "15", "--out", str(out)]) == 2  # 15 s is in segment 1
+    assert not out.exists()
+    assert "no frames" in capsys.readouterr().err
+
+
+class FailingDetector:
+    name = "failing"
+
+    def __init__(self, exc: BaseException) -> None:
+        self.exc = exc
+        self.calls = 0
+
+    def detect(self, bundle: object) -> list[object]:
+        self.calls += 1
+        if self.calls > 3:
+            raise self.exc
+        return []
+
+
+@pytest.mark.parametrize(
+    ("exc", "code"),
+    [(RuntimeError("boom"), 1), (KeyboardInterrupt(), 130)],
+    ids=["runtime-error", "interrupt"],
+)
+def test_failed_run_exit_code_and_run_json_error(
+    tmp_path: Path,
+    synth_session: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    exc: BaseException,
+    code: int,
+) -> None:
+    import speed_trap.detect
+
+    monkeypatch.setattr(speed_trap.detect, "make_detector", lambda _cfg: FailingDetector(exc))
+    cfg_file = write_cfg(tmp_path)
+    out = tmp_path / "out"
+    args = ["process", str(synth_session), "--config", str(cfg_file), "--segment", "1"]
+    assert main([*args, "--out", str(out)]) == code
+    run = json.loads((out / "run.json").read_text(encoding="utf-8"))
+    assert run["error"].startswith(type(exc).__name__)
+    assert run["counters"]["frames"] == 4
+    assert "Traceback" not in capsys.readouterr().err

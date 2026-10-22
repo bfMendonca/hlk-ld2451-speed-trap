@@ -51,6 +51,9 @@ fusion:
   lanes: null              # optional lateral lane boundaries, m, e.g. [-3.5, 0.0, 3.5]
   direction_window_s: 0.5  # window used to decide direction of travel, s (> 0)
   direction_min_travel_m: 0.5  # minimum radial travel to trust the direction, m (>= 0)
+  speed_tolerance_kmh: 10.0    # max |track radial speed - radar speed|, km/h (> 0) ...
+  speed_tolerance_ratio: 0.3   # ... or this fraction of the radar speed if larger, (0, 1]
+                               # (only for tracks seen for at least direction_window_s)
   reliable_min_matches: 2  # matches needed before a speed is shown (>= 1)
   reliable_max_age_s: 1.5  # speed expires after this long without a match, s (> 0)
 speed:
@@ -76,7 +79,7 @@ lite:
   pillar_height_m: 1.6     # assumed height of the tracked point above the road, m (> 0)
   lost_track_s: 1.5        # drop a lite track after this long, s (> 0)
 output:
-  video_codec: h264
+  video_codec: h264        # only h264 (libx264) in v1
   dir: out                 # output directory
 synth:
   report_interval_s: 0.1   # synthetic radar report period, s (> 0)
