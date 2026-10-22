@@ -275,6 +275,8 @@ def generate_session(
                 drops += 1
                 continue
             t = t0 + k * dt
+            if any(start <= t < start + length for start, length in syn.frame_gaps):
+                continue
             ts_ns = _BOOT_START_NS + round(t * _NS)
             index = len(stamps)
             stamps.append(ts_ns)

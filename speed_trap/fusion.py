@@ -2,8 +2,9 @@
 
 Safety first: a pair is only kept when it is inside a distance-aware gate, within
 ``fusion.max_range_m``, consistent in direction, lane and speed (once the track has a
-motion history), and unambiguous. When in doubt,
-no match. Never reads ahead in time; no I/O.
+motion history), and unambiguous. Each scan is compared with the tracks' road positions
+interpolated at the scan time; scans older than ``fusion.max_scan_age_s`` are skipped.
+When in doubt, no match. Never reads ahead in time; no I/O.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ _INVALID = 1e6
 _RANGE_STEP_HALF_M = 0.5  # radar range quantisation, ±0.5 m
 _ANGLE_STEP_HALF_DEG = 0.5  # radar angle quantisation, ±0.5 deg
 _MIN_COSINE = 0.5
+_Sample = tuple[int, float, float]  # (t_ns, road x, road y)
 
 
 @dataclass
@@ -36,8 +38,9 @@ class FusedTrack:
     first_ts_ns: int
     last_ts_ns: int
     road_xy: tuple[float, float] | None = None
-    road_history: deque[tuple[int, float, float]] = field(default_factory=deque)
-    boxes: list[tuple[int, Box]] = field(default_factory=list)
+    road_history: deque[_Sample] = field(default_factory=deque)
+    boxes: list[tuple[int, Box]] = field(default_factory=list)  # detected boxes only
+    road_points: list[tuple[int, tuple[float, float] | None]] = field(default_factory=list)
     matches: list[RadarMatch] = field(default_factory=list)
     reliable: bool = False
     reliable_ever: bool = False
@@ -125,10 +128,12 @@ class Fusion:
         self, observations: list[TrackObservation], scans: Sequence[RadarScan], ts_ns: int
     ) -> list[FusedTrack]:
         current = [self._upsert(obs, ts_ns) for obs in observations]
-        directions = [self._motion_direction(t, ts_ns) for t in current]
-        radials = [self._radial_kmh(t, ts_ns) for t in current]
+        max_age = round(self._cfg.max_scan_age_s * 1e9)
         for sc in scans:
-            self._match_scan(current, directions, radials, sc)
+            # Scans held back by a frame gap describe where vehicles were, not where they are.
+            if ts_ns - sc.t_ns > max_age:
+                continue
+            self._match_scan(current, sc)
         for t in current:
             self._update_reliability(t, ts_ns)
         return current
@@ -147,9 +152,12 @@ class Fusion:
         t.xyxy = obs.xyxy
         t.confidence = obs.confidence
         t.last_ts_ns = ts_ns
+        if not obs.detected:
+            return t  # predicted box (skipped detector frame): drawn, never measured
         t.boxes.append((ts_ns, obs.xyxy))
         x0, _, x1, y1 = obs.xyxy
         t.road_xy = self._camera.backproject_ground((x0 + x1) / 2, y1)
+        t.road_points.append((ts_ns, t.road_xy))
         if t.road_xy is not None:
             t.road_history.append((ts_ns, *t.road_xy))
         horizon = ts_ns - round(4 * self._cfg.direction_window_s * 1e9)
@@ -157,14 +165,37 @@ class Fusion:
             t.road_history.popleft()
         return t
 
-    def _motion_direction(self, t: FusedTrack, ts_ns: int) -> Direction | None:
-        if t.road_xy is None or not t.road_history:
+    def _history_at(self, t: FusedTrack, t_ns: int) -> list[_Sample] | None:
+        """Road samples before ``t_ns`` plus the track's interpolated position at ``t_ns``.
+
+        ``None`` when no sample lies within ``fusion.max_scan_age_s`` of ``t_ns``. Outside the
+        sampled span the nearest sample is held (no extrapolation).
+        """
+        hist = t.road_history
+        if not hist:
             return None
-        start = ts_ns - round(self._cfg.direction_window_s * 1e9)
-        oldest = next((h for h in t.road_history if h[0] >= start), None)
-        if oldest is None or oldest[0] == t.road_history[-1][0]:
+        i = bisect.bisect_left([h[0] for h in hist], t_ns)
+        before = hist[i - 1] if i > 0 else None
+        after = hist[i] if i < len(hist) else None
+        gaps = [abs(h[0] - t_ns) for h in (before, after) if h is not None]
+        if min(gaps) > round(self._cfg.max_scan_age_s * 1e9):
             return None
-        newest = t.road_history[-1]
+        if before is not None and after is not None:
+            w = (t_ns - before[0]) / (after[0] - before[0])
+            x = before[1] + w * (after[1] - before[1])
+            y = before[2] + w * (after[2] - before[2])
+        else:
+            near = before if before is not None else after
+            assert near is not None
+            x, y = near[1], near[2]
+        return [*list(hist)[:i], (t_ns, x, y)]
+
+    def _motion_direction(self, hist: Sequence[_Sample]) -> Direction | None:
+        newest = hist[-1]
+        start = newest[0] - round(self._cfg.direction_window_s * 1e9)
+        oldest = next(h for h in hist if h[0] >= start)
+        if oldest[0] == newest[0]:
+            return None
         r0, _ = self._radar.road_to_polar(oldest[1], oldest[2])
         r1, _ = self._radar.road_to_polar(newest[1], newest[2])
         travel = self._cfg.direction_min_travel_m
@@ -174,13 +205,11 @@ class Fusion:
             return "going"
         return None
 
-    def _radial_kmh(self, t: FusedTrack, ts_ns: int) -> float | None:
+    def _radial_kmh(self, hist: Sequence[_Sample]) -> float | None:
         """Track's own radial (slant-range) speed, once it has ``direction_window_s`` of history."""
-        if t.road_xy is None or not t.road_history:
-            return None
-        cutoff = ts_ns - round(self._cfg.direction_window_s * 1e9)
-        older = [h for h in t.road_history if h[0] <= cutoff]
-        newest = t.road_history[-1]
+        newest = hist[-1]
+        cutoff = newest[0] - round(self._cfg.direction_window_s * 1e9)
+        older = [h for h in hist if h[0] <= cutoff]
         if not older or newest[0] <= older[-1][0]:
             return None
         oldest = older[-1]
@@ -209,13 +238,11 @@ class Fusion:
 
     def _pair_cost(
         self,
-        t: FusedTrack,
+        xy: tuple[float, float],
         direction: Direction | None,
         radial_kmh: float | None,
         target: RadarTarget,
     ) -> float | None:
-        if t.road_xy is None:
-            return None
         if direction is not None and (direction == "coming") != target.approaching:
             return None
         if radial_kmh is not None:
@@ -224,28 +251,27 @@ class Fusion:
             )
             if abs(radial_kmh - target.speed_kmh) > tol:
                 return None
-        cost = gate_cost(self._radar, self._cfg, t.road_xy, target)
+        cost = gate_cost(self._radar, self._cfg, xy, target)
         if cost is None:
             return None
         if self._lanes is not None:
             target_xy = self._radar.target_to_road(target.angle_deg, target.distance_m)
-            if self._lane(t.road_xy) != self._lane(target_xy):
+            if self._lane(xy) != self._lane(target_xy):
                 return None
         return cost
 
-    def _match_scan(
-        self,
-        tracks: list[FusedTrack],
-        directions: list[Direction | None],
-        radials: list[float | None],
-        sc: RadarScan,
-    ) -> None:
+    def _match_scan(self, tracks: list[FusedTrack], sc: RadarScan) -> None:
         if not tracks or not sc.targets:
             return
         cost = np.full((len(tracks), len(sc.targets)), _INVALID)
-        for i, (t, d, r) in enumerate(zip(tracks, directions, radials, strict=True)):
+        for i, t in enumerate(tracks):
+            hist = self._history_at(t, sc.t_ns)
+            if hist is None:
+                continue
+            xy = (hist[-1][1], hist[-1][2])
+            direction, radial = self._motion_direction(hist), self._radial_kmh(hist)
             for j, target in enumerate(sc.targets):
-                c = self._pair_cost(t, d, r, target)
+                c = self._pair_cost(xy, direction, radial, target)
                 if c is not None:
                     cost[i, j] = c
         valid = cost < _INVALID

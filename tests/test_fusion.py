@@ -336,3 +336,85 @@ def test_short_history_track_is_not_speed_gated() -> None:
         ts(0.3),
     )[0]
     assert tr.last_match is not None
+
+
+# --- radar scan time vs track position (frame gaps) --------------------------------------
+
+
+def test_stale_scan_after_frame_gap_never_reaches_the_follower() -> None:
+    """Lead 60 km/h, follower 45 km/h; scans from a 1 s frame gap arrive with the next frame.
+
+    At the frame after the gap the follower stands where the lead was when the radar saw it.
+    """
+    f = fusion()
+    radar = make_radar()
+    y = -2.0
+    v_lead, v_follow = 60 / 3.6, 45 / 3.6
+
+    def x_lead(t: float) -> float:
+        return 50.0 - v_lead * t
+
+    t_after = 2.6
+
+    def x_follow(t: float) -> float:
+        return x_lead(1.7) + v_follow * (t_after - t)
+
+    def tgt(x: float, t: float, speed: int) -> RadarTarget:
+        r, az = radar.road_to_polar(x, y)
+        return target(round(az), round(radar.slant_range(r)), True, speed, ts(t))
+
+    for i in range(40):  # 1.6 s of history, no radar
+        t = i * 0.04
+        f.update([obs_at_road(x_lead(t), y, 1), obs_at_road(x_follow(t), y, 2)], [], ts(t))
+    scans = [scan(tgt(x_lead(s), s, 60)) for s in (1.6, 1.7)]
+    tracks = f.update(
+        [obs_at_road(x_lead(t_after), y, 1), obs_at_road(x_follow(t_after), y, 2)],
+        scans,
+        ts(t_after),
+    )
+    follower = next(t for t in tracks if t.track_id == 2)
+    assert all(m.speed_raw_kmh != 60 for m in follower.matches)
+    assert not follower.reliable
+
+
+def test_several_scans_per_frame_match_the_position_at_scan_time() -> None:
+    """With a wider max_scan_age_s, two older scans match the interpolated position."""
+    f = fusion(FusionConfig(max_scan_age_s=0.5))
+    radar = make_radar()
+    v = 60 / 3.6
+
+    def x_at(t: float) -> float:
+        return 28.0 - v * t
+
+    def tgt(t: float) -> RadarTarget:
+        r, _ = radar.road_to_polar(x_at(t), 0.0)
+        return target(0, round(radar.slant_range(r)), True, 60, ts(t))
+
+    for i in range(16):  # 0.6 s of history every 40 ms
+        f.update([obs_at_road(x_at(i * 0.04), 0, 1)], [], ts(i * 0.04))
+    t_now = 1.0  # 0.4 s frame gap: current position is ~5 m past the scans' positions
+    f.update([obs_at_road(x_at(t_now), 0, 1)], [], ts(t_now))
+    t_now = 1.04
+    tr = f.update([obs_at_road(x_at(t_now), 0, 1)], [scan(tgt(0.7)), scan(tgt(0.8))], ts(t_now))[0]
+    assert [m.t_ns for m in tr.matches] == [ts(0.7), ts(0.8)]
+
+
+def test_scan_older_than_max_scan_age_is_skipped() -> None:
+    f = fusion()
+    o = obs_at_road(20, 0, track_id=1)
+    tr = f.update([o], [scan(target(0, 20, t_ns=ts(0.0)))], ts(0.2))[0]
+    assert tr.last_match is None
+    tr = f.update([o], [scan(target(0, 20, t_ns=ts(0.3)))], ts(0.4))[0]
+    assert tr.last_match is not None
+
+
+def test_scan_without_nearby_track_sample_is_invalid() -> None:
+    """Skipped-frame observations add no road sample; a scan far from any sample is dropped."""
+    f = fusion()
+    f.update([obs_at_road(20, 0, track_id=1)], [], ts(0.0))
+    f.update([obs_at_road(20, 0, track_id=1)], [], ts(0.1))
+    predicted = TrackObservation(1, box_at_road(20, 0), 0.9, "car", False)
+    f.update([predicted], [], ts(0.2))
+    tr = f.update([predicted], [scan(target(0, 20, t_ns=ts(0.28)))], ts(0.3))[0]
+    assert len(tr.road_history) == 2
+    assert tr.last_match is None

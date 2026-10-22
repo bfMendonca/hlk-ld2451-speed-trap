@@ -148,6 +148,7 @@ class FusionConfig(_Strict):
     lanes: list[float] | None = None
     direction_window_s: float = Field(0.5, gt=0)
     direction_min_travel_m: float = Field(0.5, ge=0)
+    max_scan_age_s: float = Field(0.15, gt=0)
     speed_tolerance_kmh: float = Field(10.0, gt=0)
     speed_tolerance_ratio: float = Field(0.3, gt=0, le=1)
     reliable_min_matches: int = Field(2, ge=1)
@@ -227,6 +228,14 @@ class SynthConfig(_Strict):
     gap_s: float = Field(3.0, ge=0)
     fps: float = Field(25.0, gt=0)
     resolution: tuple[int, int] = (1296, 972)
+    frame_gaps: list[tuple[float, float]] = Field(default_factory=list)
+
+    @field_validator("frame_gaps")
+    @classmethod
+    def _gaps_valid(cls, v: list[tuple[float, float]]) -> list[tuple[float, float]]:
+        if any(start < 0 or length <= 0 for start, length in v):
+            raise ValueError("frame gaps need start >= 0 and length > 0")
+        return v
 
 
 class Config(_Strict):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import itertools
 import json
 from pathlib import Path
 
@@ -68,3 +69,17 @@ def test_stopped_vehicle_is_parked_out_of_the_moving_lanes() -> None:
     for v in vehicles:
         if v.direction is not None:  # moving vehicles never drive through the parked one
             assert abs(v.lane_y_m - parked[0].lane_y_m) > VEHICLE_WIDTH_M
+
+
+def test_frame_gaps_leave_no_frames_but_radar_continues(tmp_path: Path) -> None:
+    cfg = Config.model_validate({"synth": {"frame_gaps": [[2.0, 1.1]], "drop_probability": 0}})
+    session = generate_session(tmp_path, cfg, 5.0, 1)
+    rows = read_csv_rows(session / "video/0000.frames.csv")
+    t0 = int(rows[0]["sensor_ts_ns"])
+    times = [(int(r["sensor_ts_ns"]) - t0) / 1e9 for r in rows]
+    assert not any(2.0 <= t < 3.1 for t in times)
+    assert max(b - a for a, b in itertools.pairwise(times)) >= 1.1
+    seg = json.loads((session / "session.json").read_text())["segments"][0]
+    assert seg["max_gap_ns"] >= 1.1e9
+    reports = [r.t_rx_ns for r in open_session(session).radar_reports()]
+    assert any(2.0 <= (t - t0) / 1e9 < 3.1 for t in reports)

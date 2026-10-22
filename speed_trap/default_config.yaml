@@ -51,6 +51,9 @@ fusion:
   lanes: null              # optional lateral lane boundaries, m, e.g. [-3.5, 0.0, 3.5]
   direction_window_s: 0.5  # window used to decide direction of travel, s (> 0)
   direction_min_travel_m: 0.5  # minimum radial travel to trust the direction, m (>= 0)
+  max_scan_age_s: 0.15     # radar scans older than this at the frame they arrive with
+                           # (frame gaps) are not matched; each track's road position is
+                           # interpolated at the scan time and must have a sample this close, s (> 0)
   speed_tolerance_kmh: 10.0    # max |track radial speed - radar speed|, km/h (> 0) ...
   speed_tolerance_ratio: 0.3   # ... or this fraction of the radar speed if larger, (0, 1]
                                # (only for tracks seen for at least direction_window_s)
@@ -88,3 +91,5 @@ synth:
   gap_s: 3.0               # gap between segments, s (>= 0)
   fps: 25.0                # video frame rate (> 0)
   resolution: [1296, 972]  # video size, px
+  frame_gaps: []           # camera outages, [[start_s, length_s], ...] from session start;
+                           # no frames inside, radar keeps reporting (start >= 0, length > 0)

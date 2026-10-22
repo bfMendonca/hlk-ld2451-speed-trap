@@ -251,3 +251,35 @@ def test_parked_car_overlapped_by_passing_car_never_gets_a_speed(
     for e in events:
         box = tuple(e["capture"]["bbox_xyxy"])
         assert truth_vehicle_at(session, e["segment"], e["capture"]["frame_index"], box) == 1
+
+
+def test_frame_gap_never_gives_the_follower_the_leaders_speed(
+    tmp_path: Path, cfg_file: Path
+) -> None:
+    """Lead 60 km/h, legal follower 45 km/h, camera outage of 1.1 s while both are in range.
+
+    Radar reports from the outage arrive with the first frame after it, when the follower
+    stands roughly where the leader was (regression: it inherited the leader's reading).
+    """
+    lead = SynthVehicle(1, "coming", COMING_LANE_Y, 60.0, 60.0, 0.5)
+    follower = SynthVehicle(2, "coming", COMING_LANE_Y, 45.0, 50.5, 1.5)
+    cfg = Config.model_validate({"synth": {"frame_gaps": [[2.68, 1.1]]}})
+    session = generate_session(tmp_path / "syn", cfg, 6.0, 1, vehicles=[lead, follower])
+    out = tmp_path / "out"
+    args = ["process", str(session), "--config", str(cfg_file), "--out", str(out), "--capture"]
+    assert main([*args, "--set", "speed.limit_kmh=50", *truth_detector(session)]) == 0
+
+    tracks = load_tracks(out / "tracks.jsonl")
+    follower_tracks = tracks_matching(session, tracks, 2)
+    assert follower_tracks
+    for t in follower_tracks:
+        assert all(m["speed_raw_kmh"] <= follower.speed_kmh + 1 for m in t["matches"])
+    events = load_sidecars(out / "captures")
+    matched = [
+        truth_vehicle_at(
+            session, e["segment"], e["capture"]["frame_index"], tuple(e["capture"]["bbox_xyxy"])
+        )
+        for e in events
+    ]
+    assert matched == [1], matched  # one-to-one with the truth vehicles that speed
+    assert all(e["speed_kmh"]["max"] <= lead.speed_kmh + 1 for e in events)
