@@ -27,6 +27,8 @@ class VideoSink:
     """One H.264 file per segment with variable frame rate (pts in ms since segment start)."""
 
     def __init__(self, out_dir: Path, width: int, height: int) -> None:
+        if width % 2 or height % 2:
+            raise ValueError(f"video size must be even for yuv420p, got {width}x{height}")
         self._dir = Path(out_dir)
         self._width = width
         self._height = height
@@ -37,6 +39,11 @@ class VideoSink:
         self._last_pts = -1
 
     def write(self, segment: int, ts_ns: int, image: np.ndarray) -> None:
+        if image.shape[:2] != (self._height, self._width):
+            raise ValueError(
+                f"frame shape {image.shape[:2]} does not match video size "
+                f"(height, width) = ({self._height}, {self._width})"
+            )
         if segment != self._segment:
             self._close_current()
             self._open(segment, ts_ns)
@@ -73,6 +80,11 @@ class VideoSink:
         self._container.close()
         self._container = self._stream = None
         self._segment = None
+
+
+def _imwrite(path: Path, image: np.ndarray, params: list[int]) -> None:
+    if not cv2.imwrite(str(path), image, params):
+        raise OSError(f"cannot write image {path}")
 
 
 def _match_json(m: RadarMatch) -> dict[str, Any]:
@@ -169,15 +181,17 @@ class CaptureSink:
             if item is None:
                 continue
             _, crop, full, wall_ns = item
+            if crop.size == 0:
+                continue
             self._dir.mkdir(parents=True, exist_ok=True)
             stem = f"{ev.capture.segment:04d}_t{ev.subject_id}_{ev.speed_max_kmh:.0f}kmh"
             jpg, side = self._dir / f"{stem}.jpg", self._dir / f"{stem}.json"
             params = [cv2.IMWRITE_JPEG_QUALITY, self._cfg.jpeg_quality]
-            cv2.imwrite(str(jpg), crop, params)
+            _imwrite(jpg, crop, params)
             paths.append(jpg)
             if full is not None:
                 full_path = self._dir / f"{stem}_full.jpg"
-                cv2.imwrite(str(full_path), full, params)
+                _imwrite(full_path, full, params)
                 paths.append(full_path)
             side.write_text(json.dumps(self._sidecar(ev, wall_ns), indent=2), encoding="utf-8")
             paths.append(side)
@@ -202,6 +216,7 @@ class CaptureSink:
         return {
             "event": "speeding",
             "session": self._session_id,
+            "segment": cap.segment,
             "track_id": ev.subject_id,
             "direction": ev.direction,
             "limit_kmh": ev.limit_kmh,
@@ -211,16 +226,15 @@ class CaptureSink:
                 "at_capture": ev.speed_at_capture_kmh,
             },
             "capture": {
-                "segment": cap.segment,
                 "frame_index": cap.index,
                 "sensor_ts_ns": cap.ts_ns,
+                "wall_clock": wall,
+                "wall_clock_reliable": self._ntp,
                 "bbox_xyxy": None if cap.xyxy is None else list(cap.xyxy),
                 "detector_conf": ev.confidence,
             },
-            "wall_clock": wall,
-            "wall_clock_reliable": self._ntp,
-            "config_hash": self._hash,
-            "matches": [_match_json(m) for m in ev.history],
+            "radar_history": [_match_json(m) for m in ev.history],
+            "config_sha256": self._hash,
         }
 
 

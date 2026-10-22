@@ -133,17 +133,28 @@ def test_capture_crop_and_sidecar(tmp_path: Path) -> None:
     assert img.shape == (120, 240, 3)
     d = json.loads(side.read_text())
     assert d["speed_kmh"] == {"max": 47.0, "mean": 44.0, "at_capture": 46.0}
+    assert d["event"] == "speeding" and d["segment"] == 2
     assert d["limit_kmh"] == 40.0 and d["direction"] == "coming" and d["track_id"] == 1
-    assert d["session"] == "sess" and d["config_hash"] == "abc123"
+    assert d["session"] == "sess" and d["config_sha256"] == "abc123"
+    wall_iso = datetime.fromtimestamp(1_700_000_000, timezone.utc).isoformat()
     assert d["capture"] == {
-        "segment": 2,
         "frame_index": 17,
         "sensor_ts_ns": 5 * MS,
+        "wall_clock": wall_iso,
+        "wall_clock_reliable": True,
         "bbox_xyxy": [100, 100, 300, 200],
         "detector_conf": 0.8,
     }
-    assert d["wall_clock"] == datetime.fromtimestamp(1_700_000_000, timezone.utc).isoformat()
-    assert len(d["matches"]) == 2 and d["matches"][0]["speed_kmh"] == 45.0
+    assert len(d["radar_history"]) == 2 and d["radar_history"][0]["speed_kmh"] == 45.0
+    assert set(d["radar_history"][0]) == {
+        "t_ns",
+        "speed_kmh",
+        "speed_raw_kmh",
+        "distance_m",
+        "angle_deg",
+        "snr",
+        "approaching",
+    }
     assert not (tmp_path / "captures" / "0002_t1_47kmh_full.jpg").exists()
 
 
@@ -167,7 +178,7 @@ def test_capture_lite_uses_rendered_frame(tmp_path: Path) -> None:
     jpg = tmp_path / "captures" / "0002_t1_47kmh.jpg"
     assert imread(str(jpg)).shape == (480, 640, 3)
     d = json.loads(jpg.with_suffix(".json").read_text())
-    assert d["capture"]["bbox_xyxy"] is None and d["wall_clock"] is None
+    assert d["capture"]["bbox_xyxy"] is None and d["capture"]["wall_clock"] is None
 
 
 def test_capture_keeps_only_best_candidate_memory(tmp_path: Path) -> None:
@@ -203,7 +214,7 @@ def test_capture_wall_clock_reliability_flag(tmp_path: Path, ntp: bool) -> None:
     sink.offer([ev.capture], raw, raw, 1_700_000_000_000_000_000)
     sink.write([ev])
     d = json.loads((tmp_path / "captures" / "0002_t1_47kmh.json").read_text())
-    assert d["wall_clock_reliable"] is ntp
+    assert d["capture"]["wall_clock_reliable"] is ntp
 
 
 def test_run_info_contains_hash_and_counters(tmp_path: Path) -> None:
@@ -220,4 +231,19 @@ def test_run_info_contains_hash_and_counters(tmp_path: Path) -> None:
     assert d["started_ns"] == 1 and d["finished_ns"] == 2_000_000_001
     assert d["model"] == cfg.detector.weights
     assert "speed_trap" in d["versions"] and "ld2451" in d["versions"]
-    assert "rfdetr" not in d["versions"] or d["versions"]["rfdetr"]
+
+
+def test_capture_box_outside_frame_skipped(tmp_path: Path) -> None:
+    sink = capture_sink(tmp_path)
+    raw = np.zeros((480, 640, 3), np.uint8)
+    ev = event(xyxy=(700, 100, 800, 200))
+    sink.offer([ev.capture], raw, raw, None)
+    assert sink.write([ev]) == []
+
+
+def test_video_sink_rejects_bad_shapes(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="even"):
+        VideoSink(tmp_path, 321, 240)
+    sink = VideoSink(tmp_path, 320, 240)
+    with pytest.raises(ValueError, match="shape"):
+        sink.write(0, 0, np.zeros((100, 320, 3), np.uint8))
