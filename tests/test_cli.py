@@ -179,3 +179,17 @@ def test_progress_printer_counts_partial_segments(capsys: pytest.CaptureFixture[
         "segment 0000: 40 frames, 5.0 frames/s, 40/50 done, ETA 2 s",
         "segment 0001: 5 frames, 5.0 frames/s, 45/50 done, ETA 1 s",
     ]
+
+
+def test_process_missing_video_exits_2(
+    tmp_path: Path, synth_session: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import shutil
+
+    session = tmp_path / "s"
+    shutil.copytree(synth_session, session)
+    (session / "video" / "0000.h264").unlink()
+    cfg = write_cfg(tmp_path)
+    args = ["process", str(session), "--config", str(cfg), "--mode", "lite"]
+    assert main([*args, "--out", str(tmp_path / "out")]) == 2
+    assert "0000.h264" in capsys.readouterr().err

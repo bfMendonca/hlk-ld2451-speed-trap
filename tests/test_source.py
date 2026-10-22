@@ -160,3 +160,11 @@ def test_frame_counts_follow_selection(synth_session: Path) -> None:
 def test_empty_selection_names_segment_ranges(synth_session: Path) -> None:
     with pytest.raises(SourceError, match=r"no frames.*segment 0: 0\.0\.\.\d+\.\d s"):
         RecordedSessionSource(synth_session, RadarConfig(), segments=[0], start_s=15.0)
+
+
+def test_missing_video_file_is_a_source_error(synth_session: Path, tmp_path: Path) -> None:
+    session = copy_session(synth_session, tmp_path)
+    (session / "video" / "0001.h264").unlink()
+    RecordedSessionSource(session, RadarConfig(), segments=[0])  # not selected: fine
+    with pytest.raises(SourceError, match=r"0001\.h264"):
+        RecordedSessionSource(session, RadarConfig())

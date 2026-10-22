@@ -87,6 +87,13 @@ class RecordedSessionSource:
                 continue
             self._frames_by_segment[f.segment].append(f)
 
+        missing = [
+            str(fs[0].video)
+            for fs in self._frames_by_segment.values()
+            if fs and not Path(fs[0].video).is_file()
+        ]
+        if missing:
+            raise SourceError(f"missing video file(s): {', '.join(missing)}")
         selected = [f.sensor_ts_ns for fs in self._frames_by_segment.values() for f in fs]
         if not selected:
             ranges = []
