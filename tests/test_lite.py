@@ -80,3 +80,22 @@ def test_lite_matches_count_as_verified() -> None:
     active, _ = lk.update([scan(0.0, tg(0.0, 25))], 0)
     active, _ = lk.update([scan(0.1, tg(0.1, 24))], ts(0.1))
     assert all(m.verified for m in active[0].matches)
+
+
+def test_target_after_a_gap_longer_than_lost_track_s_starts_a_new_subject() -> None:
+    """The old subject expires at the new scan's time, before linking (not after)."""
+    lk = linker()
+    lk.update([scan(0.0, tg(0.0, 30))], 0)
+    # 2 s at 40 km/h along the lane: ~22 m closer, right where the old subject predicts
+    active, fin = lk.update([scan(2.0, tg(2.0, 8))], ts(2.0))
+    assert [s.subject_id for s in fin] == [1]
+    assert [s.subject_id for s in active] == [2]
+    assert len(fin[0].matches) == 1
+
+
+def test_scan_older_than_max_scan_age_is_skipped() -> None:
+    lk = linker()
+    active, fin = lk.update([scan(0.0, tg(0.0, 25))], ts(0.2))
+    assert active == [] and fin == []
+    active, _ = lk.update([scan(0.3, tg(0.3, 25))], ts(0.4))
+    assert len(active) == 1

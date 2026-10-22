@@ -63,14 +63,27 @@ class RadarTargetLinker:
     def update(
         self, scans: Sequence[RadarScan], ts_ns: int
     ) -> tuple[list[RadarSubject], list[RadarSubject]]:
-        """Link the scans' targets; return (active, finished) subjects."""
+        """Link the scans' targets; return (active, finished) subjects.
+
+        Subjects expire against each scan's time before it is linked, so a target after a
+        long silence never joins a subject that had already ended. Scans older than
+        ``fusion.max_scan_age_s`` at this frame are skipped (as in fusion).
+        """
+        finished: list[RadarSubject] = []
+        max_age = round(self._fusion.max_scan_age_s * 1e9)
         for sc in scans:
+            if ts_ns - sc.t_ns > max_age:
+                continue
+            finished += self._expire(sc.t_ns)
             self._link_scan(sc)
+        finished += self._expire(ts_ns)
+        return list(self._subjects), finished
+
+    def _expire(self, now_ns: int) -> list[RadarSubject]:
         lost_ns = round(self._lite.lost_track_s * 1e9)
-        active = [s for s in self._subjects if ts_ns - s.last_match.t_ns <= lost_ns]
-        finished = [s for s in self._subjects if ts_ns - s.last_match.t_ns > lost_ns]
-        self._subjects = active
-        return list(active), finished
+        gone = [s for s in self._subjects if now_ns - s.last_match.t_ns > lost_ns]
+        self._subjects = [s for s in self._subjects if now_ns - s.last_match.t_ns <= lost_ns]
+        return gone
 
     def finish_all(self) -> list[RadarSubject]:
         out, self._subjects = self._subjects, []
