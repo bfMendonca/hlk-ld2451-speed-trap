@@ -52,6 +52,10 @@ speed_trap = ["default_config.yaml", "render/fonts/*", "py.typed"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+filterwarnings = [
+    # third-party: rfdetr's backbone still calls torch.jit.script
+    "ignore:`torch.jit.script` is deprecated:FutureWarning",
+]
 
 [tool.ruff]
 target-version = "py310"

@@ -135,7 +135,7 @@ overrides (values parsed as YAML).
 | `camera` | intrinsics (optional OpenCV matrix + distortion) and pose (height, pitch, roll, yaw) |
 | `radar` | position relative to the camera, boresight, field of view, range, angle sign, direction byte, clock offset, report hold time |
 | `road` | lane heading (for the optional cosine correction) |
-| `detector` | backend (`rfdetr`, `ultralytics`, `ground_truth`), weights, device, thresholds, classes, region of interest, `every_n_frames` |
+| `detector` | backend (`rfdetr`, `ultralytics`, `ground_truth`), weights, device, `imgsz` (default 512, RF-DETR Small's native size; RF-DETR needs a multiple of 32, or 56 for Base), thresholds, classes, region of interest, `every_n_frames` |
 | `tracker` | ByteTrack thresholds and the lost-track timeout in seconds |
 | `fusion` | gates, ambiguity ratio, `max_range_m` (30 m), optional lane boundaries, reliability rules |
 | `speed` | limit (with optional per-direction overrides), cosine correction (off) |
@@ -191,6 +191,15 @@ Fusion is only as good as the geometry, so set it up before trusting full-mode c
 - **Radial speed.** The radar measures the speed component along its line of sight, which
   reads slightly low. The optional cosine correction is off so captures never overstate.
 - **Stationary vehicles** are not reported by the radar and stay gray.
+- **Lite mode identity swaps.** Without a camera, two vehicles overtaking in the same lane
+  can swap radar subjects; this can add a capture but never raises a reading.
+- **Frame gaps.** Radar reports from a camera outage longer than `fusion.max_scan_age_s` are
+  not matched (full and lite mode): the vehicles cannot be placed at the time of the report.
+- **RF-DETR checkpoint paths.** A `detector.weights` path (rather than a model name) is loaded
+  as an RF-DETR Base checkpoint and its class ids are read with the COCO table, so a
+  fine-tuned model or another variant needs code changes.
+- **FFmpeg warning.** PyAV and OpenCV each bundle FFmpeg; on macOS every run may print an
+  Objective-C warning about duplicate classes (`AVFFrameReceiver` ...). It is harmless.
 - **Offline only.** v1 is a sequential loop; `detector.every_n_frames` is the speed knob.
   Live processing (Jetson or a stream receiver) and licence-plate reading are future work.
 
