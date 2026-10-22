@@ -229,7 +229,7 @@ class Pipeline:
             radar_targets=len(self._current_targets(b.ts_ns)),
             radar_age_s=None if last is None else (b.ts_ns - last.t_ns) / 1e9,
             clock_offset_ms=cfg.radar.clock_offset_ms,
-            limit_kmh=cfg.speed.limit_kmh,
+            limits_kmh=(self._monitor.limit_for("coming"), self._monitor.limit_for("going")),
         )
 
     def _model_name(self) -> str | None:

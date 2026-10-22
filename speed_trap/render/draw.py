@@ -67,7 +67,7 @@ class HudInfo:
     radar_targets: int
     radar_age_s: float | None
     clock_offset_ms: float
-    limit_kmh: float
+    limits_kmh: tuple[float, float]  # (coming, going)
 
 
 @dataclass(frozen=True)
@@ -79,6 +79,22 @@ class _Text:
     size: float  # reference pixels (scaled by the font cache)
     color: _Color
     anchor: str = "ls"
+
+
+_DOWN, _UP = "\u25bc", "\u25b2"  # drawn as triangles: the fonts have no such glyphs
+
+
+def excess_label(matches: Sequence[RadarMatch], limit: float) -> str:
+    """Badge text: the track's largest excess over the limit, floored, never negative."""
+    top = max((m.speed_kmh for m in matches), default=limit)
+    return f"+{max(math.floor(top - limit), 0)}"
+
+
+def limit_label(coming: float, going: float) -> str:
+    """HUD limit sign; both directions (▼ coming, ▲ going) only when they differ."""
+    if coming == going:
+        return f"LIMIT {coming:g} km/h"
+    return f"LIMIT {_DOWN}{coming:g} {_UP}{going:g} km/h"
 
 
 def _hex_to_bgr(value: str) -> _Color:
@@ -440,7 +456,7 @@ class Renderer:
             by = ty
             if bx < 0 or bx + bw > self._w:
                 bx, by = tx, max(ty - bh - 4 * k, 0.0)
-            self._badge(out, texts, bx, by, bw, bh, f"+{round(m.speed_kmh - limit)}")
+            self._badge(out, texts, bx, by, bw, bh, excess_label(tr.matches, limit))
 
     def _badge(
         self,
@@ -566,7 +582,7 @@ class Renderer:
             bx = lx + lw + 6 * k
             if bx + bw > self._w:
                 bx = lx - 6 * k - bw
-            self._badge(out, texts, bx, ly, bw, bh, f"+{round(m.speed_kmh - limit)}")
+            self._badge(out, texts, bx, ly, bw, bh, excess_label(sj.matches, limit))
 
     # ------------------------------------------------------------------------------- HUD
 
@@ -582,9 +598,28 @@ class Renderer:
         )
         texts.append(_Text(16 * k, 29 * k, head, "mono", 15, light))
 
-        legend = [(w - 520 * k, "coming", "COMING", False), (w - 410 * k, "going", "GOING", False)]
+        # Split at the arrows: text pieces go through Pillow, arrows are drawn triangles.
+        pieces: list[str] = []
+        for ch in limit_label(*hud.limits_kmh):
+            if ch in (_DOWN, _UP) or not pieces or pieces[-1] in (_DOWN, _UP):
+                pieces.append(ch)
+            else:
+                pieces[-1] += ch
+        arrow_w = 14 * k
+
+        def piece_w(piece: str) -> float:
+            return arrow_w if piece in (_DOWN, _UP) else self._fonts.width("bold", 18, piece)
+
+        pill_w = 32 * k + sum(piece_w(pc) for pc in pieces) + 14 * k
+        # The legend makes room when the limit sign shows both directions.
+        single_w = 46 * k + self._fonts.width("bold", 18, limit_label(40, 40))
+        lx = w - max(pill_w - single_w, 0.0)
+        legend = [
+            (lx - 520 * k, "coming", "COMING", False),
+            (lx - 410 * k, "going", "GOING", False),
+        ]
         if hud.mode == "full":
-            legend.append((w - 305 * k, "none", "NO RADAR", True))
+            legend.append((lx - 305 * k, "none", "NO RADAR", True))
         for x, key, label, dashed in legend:
             col = self._col[key]
             box = np.array([(x, 14 * k), (x + 20 * k, 14 * k), (x + 20 * k, 30 * k), (x, 30 * k)])
@@ -596,13 +631,17 @@ class Renderer:
                 )
             texts.append(_Text(x + 28 * k, 28 * k, label, "semibold", 17, light))
 
-        limit_text = f"LIMIT {hud.limit_kmh:g} km/h"
-        pill_w = 32 * k + self._fonts.width("bold", 18, limit_text) + 14 * k
         px = w - 12 * k - pill_w
         self._pill(out, px, 7 * k, pill_w, 30 * k)
         cv2.circle(out, (round(px + 15 * k), round(22 * k)), round(11 * k), self._alert,
                    self._px(3), cv2.LINE_AA)  # fmt: skip
-        texts.append(_Text(px + 32 * k, 29 * k, limit_text, "bold", 18, _INK[::-1]))
+        x = px + 32 * k
+        for pc in pieces:
+            if pc in (_DOWN, _UP):
+                _triangle(out, x + arrow_w / 2, 22 * k, 11 * k, pc == _DOWN, _INK[::-1])
+            else:
+                texts.append(_Text(x, 29 * k, pc, "bold", 18, _INK[::-1]))
+            x += piece_w(pc)
 
         age = (
             "no report yet"

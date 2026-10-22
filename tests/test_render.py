@@ -10,7 +10,7 @@ from speed_trap.config import Config, LiteConfig, OverlayConfig
 from speed_trap.fusion import FusedTrack
 from speed_trap.geometry import CameraModel, RadarModel
 from speed_trap.lite import RadarSubject
-from speed_trap.render.draw import HudInfo, Renderer
+from speed_trap.render.draw import HudInfo, Renderer, excess_label, limit_label
 from speed_trap.source import RecordedSessionSource
 from speed_trap.types import Box, Direction, RadarMatch, RadarTarget
 
@@ -61,7 +61,7 @@ def track(
 def hud(mode: str = "full") -> HudInfo:
     return HudInfo(
         "s000011", 1, 3127, 1_700_000_000_340_000_000, mode,  # type: ignore[arg-type]
-        "yolo11s", "ByteTrack", 21.4, 2, 0.08, 0.0, 40.0,
+        "yolo11s", "ByteTrack", 21.4, 2, 0.08, 0.0, (40.0, 40.0),
     )  # fmt: skip
 
 
@@ -217,7 +217,7 @@ def test_hud_toggle_off_leaves_top_rows_untouched() -> None:
 
 
 def test_hud_without_wall_time_still_renders() -> None:
-    info = HudInfo("s1", 0, 1, None, "lite", None, None, 0.0, 0, None, 0.0, 40.0)
+    info = HudInfo("s1", 0, 1, None, "lite", None, None, 0.0, 0, None, 0.0, (40.0, 40.0))
     out = make_renderer().render(
         gray_image(),
         tracks=[],
@@ -281,3 +281,35 @@ def test_write_preview_png(synth_session: Path, tmp_path: Path) -> None:
         keep = os.environ.get("SPEED_TRAP_PREVIEW_DIR")
         if keep:
             (Path(keep) / name).write_bytes(path.read_bytes())
+
+
+def test_excess_label_is_the_max_excess_never_negative() -> None:
+    assert excess_label([match(55.0), match(48.0)], 40.0) == "+15"
+    assert excess_label([match(45.9), match(38.0)], 40.0) == "+5"  # floored
+    assert excess_label([match(39.0)], 40.0) == "+0"
+
+
+def test_limit_label_shows_both_directions_only_when_they_differ() -> None:
+    assert limit_label(40.0, 40.0) == "LIMIT 40 km/h"
+    assert limit_label(40.0, 60.0) == "LIMIT \u25bc40 \u25b260 km/h"
+
+
+def test_hud_draws_differing_limits() -> None:
+    import dataclasses
+
+    r, img = make_renderer(), gray_image()
+
+    def top_bar(info: HudInfo) -> np.ndarray:
+        out = r.render(
+            img,
+            tracks=[],
+            subjects=[],
+            current_targets=[],
+            triggered=set(),
+            limit_for=lambda _d: 40.0,
+            hud=info,
+        )
+        return out[:44]
+
+    both = dataclasses.replace(hud(), limits_kmh=(40.0, 60.0))
+    assert (top_bar(hud()) != top_bar(both)).any()
