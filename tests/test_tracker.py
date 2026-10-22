@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 import supervision as sv
 
 from speed_trap.config import TrackerConfig
@@ -53,14 +54,36 @@ def test_time_gap_finishes_and_new_ids_are_unique() -> None:
     assert out3.active[0].track_id != a
 
 
-def test_none_detections_hold_last_box() -> None:
+def test_none_detections_predict_constant_velocity_box() -> None:
     tracker = make()
-    last = run_frames(tracker, 10)[-1].active[0]
-    out = tracker.update(None, 10 * DT)
-    assert len(out.active) == 1
-    assert out.active[0].xyxy == last.xyxy
-    assert out.active[0].track_id == last.track_id
-    assert not out.active[0].detected
+    outs = run_frames(tracker, 10)  # moves 5 px per frame
+    prev, last = outs[-2].active[0], outs[-1].active[0]
+    for k in (1, 2):
+        out = tracker.update(None, (9 + k) * DT)
+        assert len(out.active) == 1
+        assert out.active[0].track_id == last.track_id
+        assert not out.active[0].detected
+        step = [b - a for a, b in zip(prev.xyxy, last.xyxy, strict=True)]
+        expected = [v + k * d for v, d in zip(last.xyxy, step, strict=True)]
+        assert list(out.active[0].xyxy) == pytest.approx(expected, abs=1e-3)
+
+
+def test_none_detections_hold_a_box_seen_once() -> None:
+    tracker = make()
+    tracker._bt = _StickyByteTrack()  # type: ignore[assignment]
+    first = tracker.update([box_at(10.0)], 0).active[0]
+    out = tracker.update(None, DT)
+    assert [o.xyxy for o in out.active] == [first.xyxy]
+
+
+def test_none_detections_skip_tracks_lost_on_the_last_detected_frame() -> None:
+    tracker = make()
+    run_frames(tracker, 10, boxes=[10.0, 400.0])
+    out = tracker.update([box_at(10.0)], 10 * DT)  # the second box is gone
+    assert len(out.active) == 1 and out.finished == []
+    kept = out.active[0].track_id
+    out = tracker.update(None, 11 * DT)
+    assert [o.track_id for o in out.active] == [kept]
 
 
 def test_lost_track_finishes_after_timeout() -> None:

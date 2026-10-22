@@ -29,10 +29,20 @@ class _Track:
     xyxy: Box
     confidence: float
     votes: Counter[str]
+    prev: tuple[int, Box] | None = None  # the detected box before ``xyxy``
 
     @property
     def class_name(self) -> str:
         return self.votes.most_common(1)[0][0]
+
+    def predict(self, ts_ns: int) -> Box:
+        """Constant-velocity box from the last two detected boxes (held if only one)."""
+        if self.prev is None or self.last_seen_ns <= self.prev[0]:
+            return self.xyxy
+        w = (ts_ns - self.last_seen_ns) / (self.last_seen_ns - self.prev[0])
+        a, b = self.prev[1], self.xyxy
+        x0, y0, x1, y1 = (bv + w * (bv - av) for av, bv in zip(a, b, strict=True))
+        return (x0, y0, x1, y1)
 
 
 class Tracker:
@@ -54,6 +64,7 @@ class Tracker:
         self._class_ids: dict[str, int] = {}
         self._class_names: list[str] = []
         self._prev_ts: int | None = None
+        self._last_active: list[int] = []  # ids emitted on the last detected frame
 
     def update(self, detections: list[Detection] | None, ts_ns: int) -> TrackerOutput:
         finished: list[int] = []
@@ -63,11 +74,17 @@ class Tracker:
 
         active: list[TrackObservation] = []
         if detections is None:
+            # Skipped detector frame: only tracks ByteTrack still held on the last detected
+            # frame, at a predicted box (ByteTrack itself is not stepped).
             finished += self._expire(ts_ns)
-            for tid, tr in self._tracks.items():
-                active.append(TrackObservation(tid, tr.xyxy, tr.confidence, tr.class_name, False))
+            for tid in self._last_active:
+                tr = self._tracks.get(tid)
+                if tr is not None:
+                    box = tr.predict(ts_ns)
+                    active.append(TrackObservation(tid, box, tr.confidence, tr.class_name, False))
             return TrackerOutput(active, finished)
 
+        self._last_active = []
         out = self._bt.update(self._to_sv(detections), timestamp=ts_ns / 1e9)
         if out.tracker_id is None or out.class_id is None or out.confidence is None:
             return TrackerOutput(active, finished + self._expire(ts_ns))
@@ -80,17 +97,21 @@ class Tracker:
             if tid not in self._tracks:
                 self._tracks[tid] = _Track(ts_ns, (x1, y1, x2, y2), 0.0, Counter())
             tr = self._tracks[tid]
+            if tr.last_seen_ns < ts_ns:
+                tr.prev = (tr.last_seen_ns, tr.xyxy)
             tr.last_seen_ns = ts_ns
             tr.xyxy = (x1, y1, x2, y2)
             tr.confidence = float(confs[i])
             tr.votes[self._class_names[int(classes[i])]] += 1
             active.append(TrackObservation(tid, tr.xyxy, tr.confidence, tr.class_name, True))
+            self._last_active.append(tid)
         finished += self._expire(ts_ns)
         return TrackerOutput(active, finished)
 
     def finish_all(self) -> list[int]:
         done = sorted(self._tracks)
         self._tracks.clear()
+        self._last_active = []
         self._ids.clear()
         self._keys.clear()
         self._bt.reset()

@@ -449,3 +449,15 @@ def test_stationary_track_match_with_unknown_direction_is_unverified() -> None:
         ts(0.6),
     )[0]
     assert tr.last_match is not None and not tr.last_match.verified
+
+
+def test_predicted_observation_is_drawn_but_not_measured() -> None:
+    f = fusion()
+    f.update([obs_at_road(20, 0, track_id=1)], [], ts(0.0))
+    predicted = TrackObservation(1, box_at_road(19, 0), 0.9, "car", False)
+    tr = f.update([predicted], [], ts(0.04))[0]
+    assert tr.xyxy == predicted.xyxy and tr.last_ts_ns == ts(0.04)
+    assert [t for t, _ in tr.boxes] == [ts(0.0)]
+    assert [t for t, _ in tr.road_points] == [ts(0.0)]
+    assert [h[0] for h in tr.road_history] == [ts(0.0)]
+    assert tr.road_xy == pytest.approx((20, 0), abs=1e-6)
