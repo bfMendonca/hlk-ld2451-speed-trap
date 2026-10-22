@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Literal
+from pathlib import Path
+from typing import Literal, Protocol
 
 import numpy as np
 
@@ -64,3 +66,24 @@ class RadarMatch:
     # True when the camera track's own direction and radial speed were both known and
     # agreed with the radar (lite radar subjects: always True, no track to disagree).
     verified: bool = False
+
+
+class Source(Protocol):
+    """A time-ordered stream of frames with their radar scans (recorded today, live later)."""
+
+    path: Path
+    session_id: str
+    width: int
+    height: int
+    fps: float
+    warnings: list[str]
+    ntp_synced: bool
+    radar_max_distance_m: float | None
+
+    @property
+    def has_radar(self) -> bool: ...
+
+    @property
+    def frame_counts(self) -> dict[int, int]: ...
+
+    def __iter__(self) -> Iterator[FrameBundle]: ...

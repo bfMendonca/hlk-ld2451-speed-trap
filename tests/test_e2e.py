@@ -5,10 +5,12 @@ from __future__ import annotations
 import csv
 import json
 import shutil
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import av
+import numpy as np
 import pytest
 
 from speed_trap.cli import main
@@ -295,3 +297,27 @@ def test_frame_gap_never_gives_the_follower_the_leaders_speed(
     ]
     assert matched == [1], matched  # one-to-one with the truth vehicles that speed
     assert all(e["speed_kmh"]["max"] <= lead.speed_kmh + 1 for e in events)
+
+
+class InMemorySource:
+    """Any object with the ``Source`` protocol's attributes can drive the pipeline."""
+
+    path = Path("/memory")
+    session_id = "mem"
+    width, height, fps = 64, 48, 25.0
+    ntp_synced, has_radar = False, False
+    radar_max_distance_m: float | None = None
+
+    def __init__(self) -> None:
+        self.warnings: list[str] = []
+        self.frame_counts = {0: 3}
+
+    def __iter__(self) -> Iterator[FrameBundle]:
+        for i in range(3):
+            yield FrameBundle(np.zeros((48, 64, 3), np.uint8), i * 40_000_000, 0, i, None, ())
+
+
+def test_pipeline_accepts_any_source(tmp_path: Path) -> None:
+    counters = Pipeline(Config(), InMemorySource(), tmp_path / "out", "lite", None).run()
+    assert counters["frames"] == 3
+    assert decoded_frame_count(tmp_path / "out" / "0000.overlay.mp4") == 3

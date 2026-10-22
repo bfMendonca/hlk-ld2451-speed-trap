@@ -19,9 +19,8 @@ from speed_trap.lite import RadarSubject, RadarTargetLinker
 from speed_trap.monitor import Candidate, SpeedingMonitor
 from speed_trap.render.draw import HudInfo, Renderer
 from speed_trap.sinks import CaptureSink, TracksSink, VideoSink, write_run_info
-from speed_trap.source import RecordedSessionSource
 from speed_trap.tracker import Tracker
-from speed_trap.types import FrameBundle, RadarScan, RadarTarget
+from speed_trap.types import FrameBundle, RadarScan, RadarTarget, Source
 
 log = logging.getLogger(__name__)
 
@@ -39,7 +38,7 @@ class Pipeline:
     def __init__(
         self,
         cfg: Config,
-        source: RecordedSessionSource,
+        source: Source,
         out_dir: Path,
         mode: Mode,
         detector: Detector | None,
