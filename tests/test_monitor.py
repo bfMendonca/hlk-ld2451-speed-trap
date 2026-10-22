@@ -146,3 +146,15 @@ def test_verified_match_outside_the_run_does_not_count() -> None:
     s.matches = [mk(0, 50, verified=True), mk(1, 50, verified=False), mk(2, 50, verified=False)]
     m.update([s], 0, 1, ts(1))
     assert m.triggered_ids == set()
+
+
+def test_event_confidence_is_the_capture_frames() -> None:
+    m = monitor()
+    s = subject([50, 50, 50], box=(100, 100, 300, 300))
+    s.confidence = 0.8
+    m.update([s], 0, 1, ts(1))  # best frame: largest box
+    s.xyxy, s.confidence = (100, 100, 150, 150), 0.95
+    m.update([s], 0, 2, ts(2))
+    ev = m.finish([s])
+    assert ev[0].capture.index == 1
+    assert ev[0].capture.confidence == 0.8 and ev[0].confidence == 0.8

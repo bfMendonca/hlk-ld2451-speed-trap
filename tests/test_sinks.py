@@ -111,7 +111,7 @@ def test_tracks_sink_one_line_per_subject(tmp_path: Path) -> None:
 def event(
     sid: int = 1, xyxy: tuple[float, float, float, float] | None = (100, 100, 300, 200)
 ) -> CaptureEvent:
-    cand = Candidate(sid, 2, 17, 5 * MS, xyxy)
+    cand = Candidate(sid, 2, 17, 5 * MS, xyxy, 0.9)
     return CaptureEvent(sid, "coming", 40.0, 47.0, 44.0, 46.0, cand, 0.8, (mk(1), mk(2)))
 
 
@@ -185,7 +185,7 @@ def test_capture_keeps_only_best_candidate_memory(tmp_path: Path) -> None:
     sink = capture_sink(tmp_path)
     first = np.full((480, 640, 3), 10, np.uint8)
     second = np.full((480, 640, 3), 250, np.uint8)
-    c1 = Candidate(1, 2, 16, 4 * MS, (100, 100, 200, 200))
+    c1 = Candidate(1, 2, 16, 4 * MS, (100, 100, 200, 200), 0.9)
     ev = event()
     sink.offer([c1], first, first, None)
     sink.offer([ev.capture], second, second, None)

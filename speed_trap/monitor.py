@@ -50,6 +50,7 @@ class Candidate:
     index: int
     ts_ns: int
     xyxy: Box | None
+    confidence: float  # detector confidence on this frame
 
 
 @dataclass(frozen=True)
@@ -103,7 +104,7 @@ class SpeedingMonitor:
                 continue
             prev = self._best.get(s.subject_id)
             if prev is None or score > prev[0]:
-                cand = Candidate(s.subject_id, segment, index, ts_ns, s.xyxy)
+                cand = Candidate(s.subject_id, segment, index, ts_ns, s.xyxy, s.confidence)
                 self._best[s.subject_id] = (score, cand)
                 improved.append(cand)
         return improved
@@ -128,7 +129,7 @@ class SpeedingMonitor:
                     mean_kmh,
                     ref.speed_kmh,
                     cand,
-                    s.confidence,
+                    cand.confidence,
                     tuple(s.matches),
                 )
             )
