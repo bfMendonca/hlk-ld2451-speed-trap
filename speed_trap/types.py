@@ -61,3 +61,6 @@ class RadarMatch:
     road_xy: tuple[float, float]
     speed_kmh: float
     speed_raw_kmh: int
+    # True when the camera track's own direction and radial speed were both known and
+    # agreed with the radar (lite radar subjects: always True, no track to disagree).
+    verified: bool = False

@@ -15,8 +15,12 @@ on a laptop and produces:
 
 The guiding rule is *near but never wrong*. A capture must never overstate a speed or attach
 a radar reading to the wrong vehicle. Radar readings are attached only within 30 m, only
-when the match is unambiguous, and only when the direction and speed agree with the track's
-own motion. The raw radial speed (which reads slightly low) is used by default. When in doubt, the vehicle stays gray and no capture is made.
+when the match is unambiguous, and never when the track's own direction or speed disagrees
+with the radar. A track too young to show either can still be matched by position, but a
+capture also needs at least one *verified* reading (direction and speed both checked
+against the track's own motion) among the consecutive over-limit readings. The raw radial
+speed (which reads slightly low) is used by default. When in doubt, the vehicle stays gray
+and no capture is made.
 
 ## How it works
 
@@ -40,7 +44,7 @@ Source ──► Detector ──► Tracker ──► Fusion ──► Speeding 
   inherits the speed of a car passing in front of it). A track becomes *reliable*
   (colored) after enough recent matches.
 - **Speeding monitor** triggers when a reliable track exceeds the limit for several
-  consecutive radar matches, keeps the best frame (largest box, not cut by the frame edge)
+  consecutive radar matches, at least one of them verified, keeps the best frame (largest box, not cut by the frame edge)
   and writes the capture when the track ends.
 
 The core stages do no file I/O, decoding or drawing and never read ahead in time, so the

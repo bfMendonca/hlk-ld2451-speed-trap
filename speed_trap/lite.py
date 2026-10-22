@@ -118,7 +118,7 @@ class RadarTargetLinker:
         return ground <= self._fusion.max_range_m
 
     def _match(self, target: RadarTarget) -> RadarMatch:
-        return radar_match(self._radar, self._speed, self._road, target)
+        return radar_match(self._radar, self._speed, self._road, target, verified=True)
 
     def _new_subject(self, target: RadarTarget) -> None:
         direction: Direction = "coming" if target.approaching else "going"

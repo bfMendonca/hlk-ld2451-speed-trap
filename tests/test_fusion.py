@@ -418,3 +418,34 @@ def test_scan_without_nearby_track_sample_is_invalid() -> None:
     tr = f.update([predicted], [scan(target(0, 20, t_ns=ts(0.28)))], ts(0.3))[0]
     assert len(tr.road_history) == 2
     assert tr.last_match is None
+
+
+def test_young_track_match_is_unverified() -> None:
+    f = fusion()
+    tr = f.update([obs_at_road(20, 0, track_id=1)], [scan(target(0, 20))], ts(0))[0]
+    assert tr.last_match is not None and not tr.last_match.verified
+
+
+def test_match_after_direction_and_speed_checks_is_verified() -> None:
+    f = fusion()
+    for i in range(6):  # 50 km/h toward the radar
+        f.update([obs_at_road(30 - 50 / 3.6 * i * 0.1, 0, track_id=1)], [], ts(i * 0.1))
+    x = 30 - 50 / 3.6 * 0.6
+    tr = f.update(
+        [obs_at_road(x, 0, track_id=1)],
+        [scan(target(0, round(make_radar().slant_range(x)), speed=48, t_ns=ts(0.6)))],
+        ts(0.6),
+    )[0]
+    assert tr.last_match is not None and tr.last_match.verified
+
+
+def test_stationary_track_match_with_unknown_direction_is_unverified() -> None:
+    f = fusion()
+    for i in range(6):
+        f.update([obs_at_road(20, 0, track_id=1)], [], ts(i * 0.1))
+    tr = f.update(
+        [obs_at_road(20, 0, track_id=1)],
+        [scan(target(0, 20, speed=5, t_ns=ts(0.6)))],
+        ts(0.6),
+    )[0]
+    assert tr.last_match is not None and not tr.last_match.verified

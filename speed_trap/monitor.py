@@ -135,11 +135,14 @@ class SpeedingMonitor:
         return events
 
     def _over(self, s: Subject, limit: float) -> bool:
-        """Last ``min_consecutive_over`` matches all exceed the limit (so the latest does)."""
+        """Last ``min_consecutive_over`` matches all exceed the limit (so the latest does),
+        and at least one of them is verified (direction and speed checked against the track).
+        """
         k = self._capture.min_consecutive_over
         if len(s.matches) < k:
             return False
-        return all(m.speed_kmh > limit for m in s.matches[-k:])
+        run = s.matches[-k:]
+        return all(m.speed_kmh > limit for m in run) and any(m.verified for m in run)
 
     def _score(self, s: Subject) -> float | None:
         if s.xyxy is None:

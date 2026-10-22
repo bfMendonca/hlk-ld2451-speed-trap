@@ -73,3 +73,10 @@ def test_close_passing_vehicle_stays_one_subject() -> None:
         active, _ = lk.update([scan(t, target)], ts(t))
         seen.update(s.subject_id for s in active)
     assert seen == {1}
+
+
+def test_lite_matches_count_as_verified() -> None:
+    lk = linker()
+    active, _ = lk.update([scan(0.0, tg(0.0, 25))], 0)
+    active, _ = lk.update([scan(0.1, tg(0.1, 24))], ts(0.1))
+    assert all(m.verified for m in active[0].matches)

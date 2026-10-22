@@ -44,9 +44,9 @@ class Subj:
         return sum(m.speed_kmh for m in self.matches) / len(self.matches)
 
 
-def mk(i: int, speed: float, dist: int = 20) -> RadarMatch:
+def mk(i: int, speed: float, dist: int = 20, verified: bool = True) -> RadarMatch:
     t = RadarTarget(ts(i), 0, dist, True, int(speed), 10, 0)
-    return RadarMatch(ts(i), t, (float(dist), 0.0), speed, int(speed))
+    return RadarMatch(ts(i), t, (float(dist), 0.0), speed, int(speed), verified)
 
 
 def subject(
@@ -121,3 +121,28 @@ def test_radar_subject_satisfies_protocol() -> None:
     s = RadarSubject(1, [mk(0, 50), mk(1, 50)], "coming")
     m.update([s], 0, 1, ts(1))
     assert len(m.finish([s])) == 1
+
+
+def test_unverified_over_limit_matches_never_trigger() -> None:
+    m = monitor()
+    s = subject([50, 50, 50])
+    s.matches = [mk(i, 50, verified=False) for i in range(3)]
+    m.update([s], 0, 1, ts(1))
+    assert m.triggered_ids == set()
+    assert m.finish([s]) == []
+
+
+def test_one_verified_match_among_the_over_limit_run_triggers() -> None:
+    m = monitor()
+    s = subject([50, 50])
+    s.matches = [mk(0, 50, verified=False), mk(1, 50, verified=True)]
+    m.update([s], 0, 1, ts(1))
+    assert m.triggered_ids == {1}
+
+
+def test_verified_match_outside_the_run_does_not_count() -> None:
+    m = monitor()
+    s = subject([50, 50, 50])
+    s.matches = [mk(0, 50, verified=True), mk(1, 50, verified=False), mk(2, 50, verified=False)]
+    m.update([s], 0, 1, ts(1))
+    assert m.triggered_ids == set()

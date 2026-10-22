@@ -88,7 +88,11 @@ def gate_cost(
 
 
 def radar_match(
-    radar: RadarModel, speed: SpeedConfig, road: RoadConfig, target: RadarTarget
+    radar: RadarModel,
+    speed: SpeedConfig,
+    road: RoadConfig,
+    target: RadarTarget,
+    verified: bool = False,
 ) -> RadarMatch:
     """Radar target -> RadarMatch, applying the optional cosine correction to its speed."""
     target_xy = radar.target_to_road(target.angle_deg, target.distance_m)
@@ -99,7 +103,7 @@ def radar_match(
         los = math.atan2(dy, dx)
         cosine = abs(math.cos(los - math.radians(road.lane_heading_deg)))
         kmh /= max(cosine, _MIN_COSINE)
-    return RadarMatch(target.t_ns, target, target_xy, kmh, target.speed_kmh)
+    return RadarMatch(target.t_ns, target, target_xy, kmh, target.speed_kmh, verified)
 
 
 class Fusion:
@@ -264,12 +268,14 @@ class Fusion:
         if not tracks or not sc.targets:
             return
         cost = np.full((len(tracks), len(sc.targets)), _INVALID)
+        verified = [False] * len(tracks)
         for i, t in enumerate(tracks):
             hist = self._history_at(t, sc.t_ns)
             if hist is None:
                 continue
             xy = (hist[-1][1], hist[-1][2])
             direction, radial = self._motion_direction(hist), self._radial_kmh(hist)
+            verified[i] = direction is not None and radial is not None
             for j, target in enumerate(sc.targets):
                 c = self._pair_cost(xy, direction, radial, target)
                 if c is not None:
@@ -292,7 +298,7 @@ class Fusion:
             # Ties (including zero costs) are ambiguous as well.
             if np.any((best > ratio * rivals) | (rivals <= best)):
                 continue
-            self._append_match(tracks[i], sc.targets[j])
+            self._append_match(tracks[i], sc.targets[j], verified[i])
 
-    def _append_match(self, t: FusedTrack, target: RadarTarget) -> None:
-        t.matches.append(radar_match(self._radar, self._speed, self._road, target))
+    def _append_match(self, t: FusedTrack, target: RadarTarget, verified: bool) -> None:
+        t.matches.append(radar_match(self._radar, self._speed, self._road, target, verified))
