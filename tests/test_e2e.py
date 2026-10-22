@@ -222,6 +222,17 @@ def test_detector_runs_every_n_frames(tmp_path: Path, synth_session: Path) -> No
     assert progress == [(1, frames)]
 
 
+def test_progress_reported_within_a_segment(tmp_path: Path, synth_session: Path) -> None:
+    cfg = Config()
+    source = RecordedSessionSource(synth_session, cfg.radar, segments=[1])
+    progress: list[tuple[int, int]] = []
+    Pipeline(cfg, source, tmp_path / "out", "full", CountingDetector()).run(
+        lambda seg, n, _fps: progress.append((seg, n)), progress_interval_s=0.0
+    )
+    frames = source.frame_counts[1]
+    assert progress == [(1, n) for n in range(1, frames + 1)]
+
+
 @pytest.mark.parametrize(
     "parked_xy",
     [

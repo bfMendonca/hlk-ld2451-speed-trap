@@ -95,6 +95,24 @@ def _setup_logging(verbose: int) -> None:
     log.propagate = False
 
 
+class ProgressPrinter:
+    """Prints pipeline progress (frames/s and ETA) to stderr; calls may repeat a segment."""
+
+    def __init__(self, frame_counts: dict[int, int]) -> None:
+        self._total = sum(frame_counts.values())
+        self._done: dict[int, int] = {}
+
+    def __call__(self, segment: int, frames: int, fps: float) -> None:
+        self._done[segment] = frames
+        done = sum(self._done.values())
+        eta = (self._total - done) / fps if fps > 0 else 0.0
+        print(
+            f"segment {segment:04d}: {frames} frames, {fps:.1f} frames/s, "
+            f"{done}/{self._total} done, ETA {eta:.0f} s",
+            file=sys.stderr,
+        )
+
+
 # --- commands -------------------------------------------------------------------------------
 
 
@@ -152,21 +170,7 @@ def _cmd_process(args: argparse.Namespace) -> int:
     out_dir: Path = args.out if args.out is not None else cfg.output.dir / source.session_id
     pipeline = Pipeline(cfg, source, out_dir, args.mode, detector)
 
-    counts = source.frame_counts
-    total = sum(counts.values())
-    done = 0
-
-    def progress(segment: int, frames: int, fps: float) -> None:
-        nonlocal done
-        done += frames
-        eta = (total - done) / fps if fps > 0 else 0.0
-        print(
-            f"segment {segment:04d}: {frames} frames, {fps:.1f} frames/s, "
-            f"{done}/{total} done, ETA {eta:.0f} s",
-            file=sys.stderr,
-        )
-
-    counters = pipeline.run(progress)
+    counters = pipeline.run(ProgressPrinter(source.frame_counts))
     summary = ", ".join(f"{k} {v}" for k, v in counters.items())
     print(f"{out_dir}: {summary}", file=sys.stderr)
     print(out_dir)

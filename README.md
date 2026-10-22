@@ -119,8 +119,8 @@ speed-trap synth OUT_DIR [--config cfg.yaml] [--duration S] [--seed N]
 
 Exit codes: `0` success, `1` runtime error, `2` usage, config or session error, `130`
 interrupted. A failed run still writes `run.json`, with an `error` field. Errors are one
-line on stderr; `-vv` adds the traceback. Progress is printed per segment with frames/s and an
-ETA. Nothing is written until the config and the session have been validated.
+line on stderr; `-vv` adds the traceback. Progress (frames/s and an ETA) is printed at least every
+5 s and at the end of each segment. Nothing is written until the config and the session have been validated.
 
 ## Configuration
 

@@ -30,7 +30,8 @@ _FALLBACK_FPS = 25.0
 _FPS_SMOOTHING = 0.9
 
 Mode = Literal["full", "lite"]
-Progress = Callable[[int, int, float], None]  # (segment, frames in segment, frames/s)
+Progress = Callable[[int, int, float], None]  # (segment, frames done in segment, frames/s)
+PROGRESS_INTERVAL_S = 5.0
 Finished = Sequence[FusedTrack] | Sequence[RadarSubject]
 
 
@@ -85,22 +86,33 @@ class Pipeline:
 
     # ------------------------------------------------------------------------------- run
 
-    def run(self, progress: Progress | None = None) -> dict[str, int]:
+    def run(
+        self, progress: Progress | None = None, progress_interval_s: float = PROGRESS_INTERVAL_S
+    ) -> dict[str, int]:
+        """Process the whole source; ``progress`` is called at least every
+        ``progress_interval_s`` of wall time within a segment and at each segment end."""
         started_ns = time.time_ns()
         try:
-            self._run(progress)
+            self._run(progress, progress_interval_s)
         except BaseException as e:  # incl. KeyboardInterrupt: leave a record of the partial run
             self._write_run_info(started_ns, f"{type(e).__name__}: {e}")
             raise
         self._write_run_info(started_ns, None)
         return dict(self._counters)
 
-    def _run(self, progress: Progress | None) -> None:
+    def _run(self, progress: Progress | None, interval_s: float) -> None:
         cfg, src = self._cfg, self._source
         n_warnings = len(src.warnings)
         seg: int | None = None
-        seg_frames, seg_t0 = 0, time.perf_counter()
-        t_prev = seg_t0
+        seg_frames, reported, seg_t0 = 0, 0, time.perf_counter()
+        t_prev = t_report = seg_t0
+
+        def report() -> None:
+            nonlocal reported, t_report
+            if seg is not None and progress is not None and seg_frames != reported:
+                progress(seg, seg_frames, _rate(seg_frames, seg_t0))
+                reported, t_report = seg_frames, time.perf_counter()
+
         try:
             self._video = VideoSink(self._out, src.width, src.height, cfg.output.video_codec)
             self._tracks_sink = TracksSink(self._out / "tracks.jsonl")
@@ -110,16 +122,17 @@ class Pipeline:
                 )
             for bundle in src:
                 if bundle.segment != seg:
-                    if seg is not None and progress is not None:
-                        progress(seg, seg_frames, _rate(seg_frames, seg_t0))
-                    seg, seg_frames, seg_t0 = bundle.segment, 0, time.perf_counter()
+                    report()
+                    seg, seg_frames, reported = bundle.segment, 0, 0
+                    seg_t0 = t_report = time.perf_counter()
                 self._step(bundle)
                 now = time.perf_counter()
                 self._tick(now - t_prev)  # decode + processing time of this frame
                 t_prev = now
                 seg_frames += 1
-            if seg is not None and progress is not None:
-                progress(seg, seg_frames, _rate(seg_frames, seg_t0))
+                if now - t_report >= interval_s:
+                    report()
+            report()
             self._finish(self._finish_all())
         finally:
             if self._video is not None:

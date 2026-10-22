@@ -164,3 +164,18 @@ def test_failed_run_exit_code_and_run_json_error(
     assert run["error"].startswith(type(exc).__name__)
     assert run["counters"]["frames"] == 4
     assert "Traceback" not in capsys.readouterr().err
+
+
+def test_progress_printer_counts_partial_segments(capsys: pytest.CaptureFixture[str]) -> None:
+    from speed_trap.cli import ProgressPrinter
+
+    p = ProgressPrinter({0: 40, 1: 10})
+    p(0, 10, 5.0)  # mid-segment report
+    p(0, 40, 5.0)  # segment end
+    p(1, 5, 5.0)
+    lines = capsys.readouterr().err.splitlines()
+    assert lines == [
+        "segment 0000: 10 frames, 5.0 frames/s, 10/50 done, ETA 8 s",
+        "segment 0000: 40 frames, 5.0 frames/s, 40/50 done, ETA 2 s",
+        "segment 0001: 5 frames, 5.0 frames/s, 45/50 done, ETA 1 s",
+    ]
