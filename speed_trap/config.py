@@ -112,7 +112,7 @@ class DetectorConfig(_Strict):
     backend: Literal["rfdetr", "ultralytics", "ground_truth"] = "rfdetr"
     weights: str = "rfdetr-small"
     device: str = "mps"
-    imgsz: int = Field(960, ge=32)
+    imgsz: int = Field(512, ge=32)  # RF-DETR Small native resolution
     every_n_frames: int = Field(1, ge=1)
     conf: float = Field(0.35, ge=0, le=1)
     iou: float = Field(0.5, ge=0, le=1)

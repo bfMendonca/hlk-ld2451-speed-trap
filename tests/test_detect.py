@@ -85,3 +85,14 @@ def test_rfdetr_smoke() -> None:
 def test_yolo_smoke() -> None:
     det = make_detector(DetectorConfig(backend="ultralytics", weights="yolo11n.pt", device="cpu"))
     assert isinstance(det.detect(_black_bundle()), list)
+
+
+def test_default_imgsz_is_rfdetr_small_native_resolution() -> None:
+    assert DetectorConfig().imgsz == 512
+
+
+@pytest.mark.skipif(importlib.util.find_spec("rfdetr") is None, reason="rfdetr extra not installed")
+def test_rfdetr_rejects_imgsz_not_divisible_by_the_block_size() -> None:
+    cfg = DetectorConfig(backend="rfdetr", weights="rfdetr-nano", device="cpu", imgsz=500)
+    with pytest.raises(ConfigError, match=r"detector\.imgsz.*multiple of 32"):
+        make_detector(cfg)

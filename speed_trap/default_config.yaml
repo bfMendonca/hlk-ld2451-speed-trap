@@ -29,7 +29,9 @@ detector:
   backend: rfdetr          # rfdetr (Apache-2.0) | ultralytics (AGPL-3.0, optional extra)
   weights: rfdetr-small    # model name or path
   device: mps              # mps | cuda | cpu
-  imgsz: 960               # inference size, px (>= 32)
+  imgsz: 512               # inference size, px (>= 32); 512 = RF-DETR Small native.
+                           # RF-DETR needs a multiple of patch size x windows (32 for
+                           # nano/small/medium/large, 56 for base)
   every_n_frames: 1        # detector runs on every Nth frame, tracker fills in (>= 1)
   conf: 0.35               # confidence threshold, 0..1
   iou: 0.5                 # NMS IoU threshold, 0..1

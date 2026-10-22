@@ -39,6 +39,14 @@ class RfDetrDetector:
             self._model = getattr(rfdetr, "RFDETRBase")(  # noqa: B009
                 pretrain_weights=cfg.weights, device=cfg.device
             )
+        mc = self._model.model_config
+        block = int(mc.patch_size) * int(mc.num_windows)
+        if cfg.imgsz % block:
+            raise ConfigError(
+                f"detector.imgsz {cfg.imgsz} must be a multiple of {block} for "
+                f"{cfg.weights} (patch size {mc.patch_size} x {mc.num_windows} windows); "
+                f"native resolution: {mc.resolution}"
+            )
 
     def detect(self, bundle: FrameBundle) -> list[Detection]:
         rgb = cv2.cvtColor(bundle.image, cv2.COLOR_BGR2RGB)
