@@ -48,7 +48,7 @@ fusion:
     range_base_m: 1.5      # base range gate, m (> 0)
     range_per_m2: 0.002    # extra gate per m^2 of range, m (>= 0)
     angle_margin_deg: 1.0  # extra angular margin, degrees (>= 0)
-  ambiguity_ratio: 0.7     # second-best/best cost above this drops the match, (0, 1]
+  ambiguity_ratio: 0.7     # best/second-best cost above this drops the match, (0, 1]
   max_range_m: 30.0        # no matching or capture beyond this, m (> 0)
   lanes: null              # optional lateral lane boundaries, m, e.g. [-3.5, 0.0, 3.5]
   direction_window_s: 0.5  # window used to decide direction of travel, s (> 0)
