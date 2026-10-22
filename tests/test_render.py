@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import cv2
@@ -179,17 +180,25 @@ def test_lite_pillar_drawn_at_radar_point() -> None:
     assert near_color(out[v - 10, u], "#ffffff", 60)
 
 
+def _pillar_mid_changed(r: Renderer, distance: int) -> bool:
+    tg = RadarTarget(NS, 0, distance, True, 50, 70, 0)
+    img = gray_image()
+    base = render(r, img)
+    out = render(r, img, targets=[tg])
+    xy = r._radar.target_to_road(0, distance)
+    uv, front = r._camera.project(np.array([[*xy, 0.0], [*xy, 0.8]]))
+    assert front.all()
+    u, v = round(uv[0, 0]), round(uv[1, 1])
+    assert 50 <= v < H - 50 and 0 <= u < W
+    return bool((out[v, u] != base[v, u]).any())
+
+
 def test_far_target_drawn_as_thin_pillar_without_label() -> None:
     r = make_renderer()
-    far = RadarTarget(NS, 0, 90, True, 50, 70, 0)
-    img = gray_image()
-    out = render(r, img, targets=[far])
-    xy = r._radar.target_to_road(0, 90)
-    uv, front = r._camera.project(np.array([[*xy, 0.0]]))
-    assert front[0]
-    u, v = int(uv[0, 0]), int(uv[0, 1])
-    if 0 <= v < H and 0 <= u < W:
-        assert (out[max(v - 3, 0), u] != img[max(v - 3, 0), u]).any()
+    assert _pillar_mid_changed(r, 40)  # beyond far_range_m (30), inside radar range (70)
+    assert not _pillar_mid_changed(r, 20)  # inside fusion range: no thin pillar
+    assert not _pillar_mid_changed(Renderer(r._camera, r._radar, OverlayConfig(), LiteConfig(),
+                                            far_range_m=50.0), 40)  # fmt: skip
 
 
 def test_hud_toggle_off_leaves_top_rows_untouched() -> None:
@@ -263,6 +272,6 @@ def test_write_preview_png(synth_session: Path, tmp_path: Path) -> None:
         assert cv2.imwrite(str(path), out)
         back = cv2.imread(str(path))
         assert back is not None and back.shape == (H, W, 3)
-        (
-            Path(__file__).parent.parent / ".superpowers/sdd/2026-10-21-speed-trap" / name
-        ).write_bytes(path.read_bytes())
+        keep = os.environ.get("SPEED_TRAP_PREVIEW_DIR")
+        if keep:
+            (Path(keep) / name).write_bytes(path.read_bytes())

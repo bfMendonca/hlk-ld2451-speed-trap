@@ -200,11 +200,14 @@ class Renderer:
         radar: RadarModel,
         overlay: OverlayConfig,
         lite: LiteConfig,
+        *,
+        far_range_m: float = 30.0,
     ) -> None:
         self._camera = camera
         self._radar = radar
         self._overlay = overlay
         self._lite = lite
+        self._far_range_m = far_range_m
         self._w, self._h = camera.width, camera.height
         self._k = camera.width / _REF_WIDTH
         self._fonts = _Fonts(self._k)
@@ -312,7 +315,7 @@ class Renderer:
             texts.extend(self._ring_labels)
         if hud.mode == "full":
             for tg in current_targets:
-                if self._ground_range(tg) > self._radar.max_range_m:
+                if self._ground_range(tg) > self._far_range_m:
                     self._thin_pillar(out, tg)
             for tr in sorted(tracks, key=lambda t: t.xyxy[3]):
                 self._draw_track(out, texts, tr, tr.subject_id in triggered, limit_for)
@@ -551,7 +554,7 @@ class Renderer:
         limit = limit_for(sj.direction)
         speed, over = self._speed_parts(m, limit)
         self._speed_text(texts, lx + 10 * k, ly + 29 * k, speed,
-                         self._alert if over else _INK[::-1], _INK[::-1])  # fmt: skip
+                         _WHITE if over else _INK[::-1], _INK[::-1])  # fmt: skip
         _triangle(out, lx + lw - 14 * k, ly + 20 * k, 12 * k, sj.direction == "coming", _INK[::-1])
         texts.append(
             _Text(
