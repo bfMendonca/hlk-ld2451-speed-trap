@@ -39,7 +39,10 @@ Source ──► Detector ──► Tracker ──► Fusion ──► Speeding 
 - **Tracker** keeps one identity per vehicle (ByteTrack, timeouts in seconds).
 - **Fusion** places each box on the road plane (bottom-centre, back-projected through the
   camera model) and each radar target on the road from its range and angle, then assigns
-  them with the Hungarian algorithm inside distance-aware gates. Once a track has been seen
+  them with the Hungarian algorithm inside distance-aware gates. Each radar report is
+  compared with where the tracks were at the report's time (interpolated between frames);
+  reports older than `fusion.max_scan_age_s` when their frame arrives (camera outages) are
+  not used. Once a track has been seen
   long enough, its own radial speed must also agree with the radar's (so a parked car never
   inherits the speed of a car passing in front of it). A track becomes *reliable*
   (colored) after enough recent matches.
