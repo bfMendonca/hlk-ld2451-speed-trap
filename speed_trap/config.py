@@ -147,7 +147,7 @@ class FusionConfig(_Strict):
     max_range_m: float = Field(30.0, gt=0)
     lanes: list[float] | None = None
     direction_window_s: float = Field(0.5, gt=0)
-    direction_min_travel_m: float = Field(0.5, ge=0)
+    direction_min_travel_m: float = Field(0.5, gt=0)
     max_scan_age_s: float = Field(0.15, gt=0)
     speed_tolerance_kmh: float = Field(10.0, gt=0)
     speed_tolerance_ratio: float = Field(0.3, gt=0, le=1)

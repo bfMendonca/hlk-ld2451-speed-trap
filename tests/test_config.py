@@ -90,6 +90,9 @@ def test_range_min_must_be_below_max(tmp_path: Path) -> None:
         "fusion:\n  ambiguity_ratio: 0\n",
         "fusion:\n  ambiguity_ratio: 1.5\n",
         "fusion:\n  max_range_m: 0\n",
+        "fusion:\n  direction_min_travel_m: 0\n",
+        "fusion:\n  max_scan_age_s: 0\n",
+        "synth:\n  frame_gaps: [[1.0, 0]]\n",
     ],
 )
 def test_out_of_range_values_rejected(tmp_path: Path, text: str) -> None:

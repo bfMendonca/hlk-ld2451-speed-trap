@@ -50,7 +50,7 @@ fusion:
   max_range_m: 30.0        # no matching or capture beyond this, m (> 0)
   lanes: null              # optional lateral lane boundaries, m, e.g. [-3.5, 0.0, 3.5]
   direction_window_s: 0.5  # window used to decide direction of travel, s (> 0)
-  direction_min_travel_m: 0.5  # minimum radial travel to trust the direction, m (>= 0)
+  direction_min_travel_m: 0.5  # minimum radial travel to trust the direction, m (> 0)
   max_scan_age_s: 0.15     # radar scans older than this at the frame they arrive with
                            # (frame gaps) are not matched; each track's road position is
                            # interpolated at the scan time and must have a sample this close, s (> 0)
