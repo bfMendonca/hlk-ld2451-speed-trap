@@ -58,3 +58,18 @@ def test_targets_beyond_max_range_ignored() -> None:
     lk = linker()
     active, fin = lk.update([scan(0.0, tg(0.0, 60))], 0)
     assert active == [] and fin == []
+
+
+def test_close_passing_vehicle_stays_one_subject() -> None:
+    """Near the radar the angle changes by more than the gate between scans (60 km/h, 2 m off)."""
+    lk = linker()
+    radar = RadarModel((0.0, 0.0), 1.6, 0.0, 1, 40.0, 1.0, 100.0)
+    seen: set[int] = set()
+    for i in range(16):
+        t = i * 0.1
+        x = 30.0 - 60 / 3.6 * t
+        ground, angle = radar.road_to_polar(x, 2.0)
+        target = RadarTarget(ts(t), round(angle), round(radar.slant_range(ground)), True, 59, 9, 0)
+        active, _ = lk.update([scan(t, target)], ts(t))
+        seen.update(s.subject_id for s in active)
+    assert seen == {1}

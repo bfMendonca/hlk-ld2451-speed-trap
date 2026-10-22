@@ -149,3 +149,9 @@ def test_radar_latency_is_subtracted(tmp_path: Path, synth_session: Path) -> Non
     base = [t.t_ns for b in RecordedSessionSource(synth_session, RadarConfig()) for t in b.scans]
     lat = [t.t_ns for b in RecordedSessionSource(s, RadarConfig()) for t in b.scans]
     assert min(lat) == min(base) - 20_000_000
+
+
+def test_frame_counts_follow_selection(synth_session: Path) -> None:
+    src = RecordedSessionSource(synth_session, RadarConfig(), segments=[1], start_s=12.0)
+    assert set(src.frame_counts) == {1}
+    assert src.frame_counts[1] == len(list(src))

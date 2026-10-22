@@ -23,6 +23,7 @@ from speed_trap.types import Direction
 
 COMING_LANE_Y = 1.75
 GOING_LANE_Y = -1.75
+PARKED_Y = 4.0  # half on the kerb beside the coming lane, out of the moving traffic
 VEHICLE_WIDTH_M = 1.8
 VEHICLE_HEIGHT_M = 1.5
 _NS = 1_000_000_000
@@ -74,7 +75,7 @@ def default_scenario(duration_s: float, seed: int) -> list[SynthVehicle]:
         SynthVehicle(1, "coming", COMING_LANE_Y, 60.0, 60.0, 1.0),
         SynthVehicle(2, "going", GOING_LANE_Y, 30.0, 10.0, 0.5),
         SynthVehicle(3, "going", GOING_LANE_Y, 50.0, 8.0, 6.0),
-        SynthVehicle(4, None, COMING_LANE_Y, 0.0, 20.0, 0.0),
+        SynthVehicle(4, None, PARKED_Y, 0.0, 20.0, 0.0),
     ]
     rng = random.Random(seed)
     for i in range(max(int(duration_s / 3), 1)):

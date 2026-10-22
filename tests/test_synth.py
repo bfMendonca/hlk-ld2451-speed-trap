@@ -57,3 +57,14 @@ def test_deterministic_with_seed(tmp_path: Path) -> None:
     b = generate_session(tmp_path / "b", Config(), 3.0, 7)
     assert (a / "radar/0000.csv").read_bytes() == (b / "radar/0000.csv").read_bytes()
     assert (a / "truth.json").read_bytes() == (b / "truth.json").read_bytes()
+
+
+def test_stopped_vehicle_is_parked_out_of_the_moving_lanes() -> None:
+    from speed_trap.synth import VEHICLE_WIDTH_M, default_scenario
+
+    vehicles = default_scenario(20.0, 1)
+    parked = [v for v in vehicles if v.direction is None]
+    assert len(parked) == 1
+    for v in vehicles:
+        if v.direction is not None:  # moving vehicles never drive through the parked one
+            assert abs(v.lane_y_m - parked[0].lane_y_m) > VEHICLE_WIDTH_M

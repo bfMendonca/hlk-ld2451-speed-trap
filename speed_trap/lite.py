@@ -88,7 +88,7 @@ class RadarTargetLinker:
                 for j, tg in enumerate(targets):
                     if (s.direction == "coming") != tg.approaching:
                         continue
-                    c = gate_cost(self._radar, self._fusion, s.last_match.road_xy, tg)
+                    c = gate_cost(self._radar, self._fusion, self._predict(s, tg.t_ns), tg)
                     if c is not None:
                         cost[i, j] = c
             rows, cols = linear_sum_assignment(cost)
@@ -99,6 +99,19 @@ class RadarTargetLinker:
         for j, tg in enumerate(targets):
             if j not in used and self._in_range(tg):
                 self._new_subject(tg)
+
+    def _predict(self, s: RadarSubject, t_ns: int) -> tuple[float, float]:
+        """Last road point moved along the lane at the last radial speed (under-predicts).
+
+        Without it the angular gate splits a vehicle near the radar, where its azimuth
+        changes by more than the gate between two reports.
+        """
+        last = s.last_match
+        dist = last.speed_raw_kmh / 3.6 * max(t_ns - last.t_ns, 0) / 1e9
+        heading = math.radians(self._road.lane_heading_deg)
+        sign = -1.0 if s.direction == "coming" else 1.0
+        x, y = last.road_xy
+        return x + sign * dist * math.cos(heading), y + sign * dist * math.sin(heading)
 
     def _in_range(self, target: RadarTarget) -> bool:
         ground = math.sqrt(max(target.distance_m**2 - self._radar.height_m**2, 0.0))

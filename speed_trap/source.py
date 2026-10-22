@@ -102,6 +102,11 @@ class RecordedSessionSource:
     def has_radar(self) -> bool:
         return self._has_radar
 
+    @property
+    def frame_counts(self) -> dict[int, int]:
+        """Selected frames per selected segment (after --segment/--start/--end)."""
+        return {s: len(fs) for s, fs in self._frames_by_segment.items()}
+
     def _assign_scans(
         self, all_frames: list[Frame], cfg: RadarConfig
     ) -> dict[tuple[int, int], list[RadarScan]]:
