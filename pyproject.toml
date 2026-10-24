@@ -90,5 +90,5 @@ files = ["speed_trap", "tests"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["scipy", "scipy.*", "serial", "serial.*", "ultralytics", "ultralytics.*"]
+module = ["scipy", "scipy.*", "serial", "serial.*", "ultralytics", "ultralytics.*", "rfdetr", "rfdetr.*"]
 ignore_missing_imports = true
