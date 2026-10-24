@@ -1,6 +1,8 @@
 # speed-trap: offline radar + camera processing, design
 
-Date: 2026-10-21. Status: awaiting the user's approval.
+> **Historical design record.** Written before implementation; the code is the source of truth. Since then the `ld2451` and `radar-cam-recorder` dependencies moved from sibling checkouts to their GitHub repositories, and later review rounds added safeguards (scan-time matching, speed-consistency gate, verified matches) described in the README.
+
+Date: 2026-10-21. Status: approved.
 
 ## 1. Intent
 
@@ -111,8 +113,7 @@ Facts that shape the design:
   get a gray box that keeps the last measured values (if any).
 - Label style **B** from the mockups: corner brackets instead of a full box, and a side tag
   joined to the box by a leader line (speed large, then track id + direction arrow, then
-  distance · angle · SNR). Mockup page: https://claude.ai/artifact/JZsmwtN8qDbNDdmHxHXnpP
-  (private to the user).
+  distance · angle · SNR). (Accepted from an interactive mockup.)
 - Mockup colors and HUD accepted: teal (coming), amber (going), gray dashed (no radar),
   red for the over-limit speed and the capture marker; top bar with session/segment/frame/
   time and a legend and limit sign; bottom bar with radar status and mode/model/fps.
@@ -293,7 +294,7 @@ detector:
   backend: rfdetr                            # rfdetr (default, Apache-2.0) | ultralytics (AGPL-3.0, optional)
   weights: rfdetr-small
   device: mps
-  imgsz: 960
+  imgsz: 512
   every_n_frames: 1                          # run the detector on every Nth frame; tracker fills in
   conf: 0.35
   iou: 0.5

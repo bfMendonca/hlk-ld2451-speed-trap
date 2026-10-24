@@ -1,0 +1,146 @@
+{
+  "event": "speeding",
+  "session": "s000001",
+  "segment": 0,
+  "track_id": 4,
+  "direction": "coming",
+  "limit_kmh": 40.0,
+  "speed_kmh": {
+    "max": 60.0,
+    "mean": 58.23076923076923,
+    "at_capture": 55.0
+  },
+  "capture": {
+    "frame_index": 100,
+    "sensor_ts_ns": 104240000000,
+    "wall_clock": "2026-10-21T06:00:04.240000+00:00",
+    "wall_clock_reliable": false,
+    "bbox_xyxy": [
+      107.39854431152344,
+      628.870849609375,
+      482.2310791015625,
+      907.6875
+    ],
+    "detector_conf": 0.8999999761581421
+  },
+  "radar_history": [
+    {
+      "t_ns": 102900000000,
+      "speed_kmh": 60.0,
+      "speed_raw_kmh": 60,
+      "distance_m": 29,
+      "angle_deg": 12,
+      "snr": 37,
+      "approaching": true
+    },
+    {
+      "t_ns": 103000000000,
+      "speed_kmh": 59.0,
+      "speed_raw_kmh": 59,
+      "distance_m": 27,
+      "angle_deg": 12,
+      "snr": 50,
+      "approaching": true
+    },
+    {
+      "t_ns": 103100000000,
+      "speed_kmh": 59.0,
+      "speed_raw_kmh": 59,
+      "distance_m": 25,
+      "angle_deg": 12,
+      "snr": 32,
+      "approaching": true
+    },
+    {
+      "t_ns": 103200000000,
+      "speed_kmh": 59.0,
+      "speed_raw_kmh": 59,
+      "distance_m": 24,
+      "angle_deg": 12,
+      "snr": 32,
+      "approaching": true
+    },
+    {
+      "t_ns": 103300000000,
+      "speed_kmh": 59.0,
+      "speed_raw_kmh": 59,
+      "distance_m": 22,
+      "angle_deg": 13,
+      "snr": 48,
+      "approaching": true
+    },
+    {
+      "t_ns": 103400000000,
+      "speed_kmh": 59.0,
+      "speed_raw_kmh": 59,
+      "distance_m": 20,
+      "angle_deg": 13,
+      "snr": 42,
+      "approaching": true
+    },
+    {
+      "t_ns": 103500000000,
+      "speed_kmh": 59.0,
+      "speed_raw_kmh": 59,
+      "distance_m": 19,
+      "angle_deg": 13,
+      "snr": 40,
+      "approaching": true
+    },
+    {
+      "t_ns": 103600000000,
+      "speed_kmh": 59.0,
+      "speed_raw_kmh": 59,
+      "distance_m": 17,
+      "angle_deg": 14,
+      "snr": 32,
+      "approaching": true
+    },
+    {
+      "t_ns": 103700000000,
+      "speed_kmh": 58.0,
+      "speed_raw_kmh": 58,
+      "distance_m": 15,
+      "angle_deg": 15,
+      "snr": 23,
+      "approaching": true
+    },
+    {
+      "t_ns": 103800000000,
+      "speed_kmh": 58.0,
+      "speed_raw_kmh": 58,
+      "distance_m": 14,
+      "angle_deg": 15,
+      "snr": 57,
+      "approaching": true
+    },
+    {
+      "t_ns": 103900000000,
+      "speed_kmh": 57.0,
+      "speed_raw_kmh": 57,
+      "distance_m": 12,
+      "angle_deg": 17,
+      "snr": 27,
+      "approaching": true
+    },
+    {
+      "t_ns": 104000000000,
+      "speed_kmh": 56.0,
+      "speed_raw_kmh": 56,
+      "distance_m": 11,
+      "angle_deg": 18,
+      "snr": 38,
+      "approaching": true
+    },
+    {
+      "t_ns": 104100000000,
+      "speed_kmh": 55.0,
+      "speed_raw_kmh": 55,
+      "distance_m": 9,
+      "angle_deg": 20,
+      "snr": 22,
+      "approaching": true
+    }
+  ],
+  "config_sha256": "f9cef8ee8d004a8dfbfd8d33c178932a6b7625ec1260e5fe5da74ae2d18cdeb1"
+}

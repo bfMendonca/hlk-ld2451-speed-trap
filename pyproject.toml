@@ -5,9 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "speed-trap"
 version = "0.1.0"
-description = "Offline speed trap: fuse HLK-LD2451 radar data with camera video"
+description = "Offline speed trap: fuse HLK-LD2451 radar readings with camera detections and tracking"
+readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
+authors = [{ name = "Bruno Mendonça" }]
+keywords = ["speed-trap", "radar", "ld2451", "hlk-ld2451", "sensor-fusion", "object-detection", "tracking", "rf-detr", "bytetrack", "computer-vision"]
 dependencies = [
     "numpy>=1.26",
     "scipy>=1.11",
@@ -22,9 +25,24 @@ dependencies = [
     "trackers>=2.6",
 ]
 classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "Topic :: Multimedia :: Video",
     "Typing :: Typed",
 ]
+
+[project.urls]
+Homepage = "https://github.com/bfMendonca/hlk-ld2451-speed-trap"
+Issues = "https://github.com/bfMendonca/hlk-ld2451-speed-trap/issues"
+Changelog = "https://github.com/bfMendonca/hlk-ld2451-speed-trap/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 rfdetr = ["rfdetr>=1.2"]
@@ -40,8 +58,8 @@ dev = ["pytest>=8", "ruff>=0.5", "mypy>=1.10", "types-PyYAML"]
 default-groups = ["dev"]
 
 [tool.uv.sources]
-ld2451 = { path = "../driver-hlk-ld2451", editable = true }
-radar-cam-recorder = { path = "../radar-cam-recorder", editable = true }
+ld2451 = { git = "https://github.com/bfMendonca/ld2451.git", branch = "main" }
+radar-cam-recorder = { git = "https://github.com/bfMendonca/radar-cam-recorder.git", branch = "master" }
 
 [tool.setuptools.packages.find]
 include = ["speed_trap*"]
@@ -60,7 +78,7 @@ filterwarnings = [
 [tool.ruff]
 target-version = "py310"
 line-length = 100
-extend-exclude = ["*.md"]
+extend-exclude = ["docs/design"]  # historical design records, kept verbatim
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
@@ -69,7 +87,6 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 python_version = "3.10"
 strict = true
 files = ["speed_trap", "tests"]
-mypy_path = ["../driver-hlk-ld2451", "../radar-cam-recorder"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]

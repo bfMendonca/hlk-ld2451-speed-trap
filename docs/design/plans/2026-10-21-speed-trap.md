@@ -1,5 +1,7 @@
 # speed-trap v1 Implementation Plan
 
+> **Historical design record.** Written before implementation; the code is the source of truth. Since then the `ld2451` and `radar-cam-recorder` dependencies moved from sibling checkouts to their GitHub repositories, and later review rounds added safeguards (scan-time matching, speed-consistency gate, verified matches) described in the README.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** An offline CLI that turns a `radar-cam-recorder` session into an annotated overlay video, a per-vehicle track log and optional speeder captures, by fusing a vehicle detector + tracker with HLK-LD2451 radar readings.
@@ -8,7 +10,7 @@
 
 **Tech Stack:** Python ≥ 3.10 (dev pin 3.12), uv, pydantic v2, PyYAML, numpy, scipy, OpenCV, Pillow, PyAV, supervision (ByteTrack); optional extras `rfdetr` (default detector) and `yolo` (ultralytics); pytest, ruff, mypy strict.
 
-**Spec:** `docs/superpowers/specs/2026-10-21-speed-trap-design.md` (read it before starting any task).
+**Spec:** `docs/design/specs/2026-10-21-speed-trap-design.md` (read it before starting any task).
 
 ## Global Constraints
 
@@ -556,7 +558,7 @@ def test_targets_beyond_max_range_ignored(): ...
   - `@dataclass(frozen=True) HudInfo(session_id: str, segment: int, index: int, wall_time_ns: int | None, mode: Literal["full", "lite"], model: str | None, tracker: str | None, fps: float, radar_targets: int, radar_age_s: float | None, clock_offset_ms: float, limit_kmh: float)`
   - `class Renderer`: `__init__(self, camera: CameraModel, radar: RadarModel, overlay: OverlayConfig, lite: LiteConfig)`; `render(self, image: np.ndarray, *, tracks: Sequence[FusedTrack], subjects: Sequence[RadarSubject], current_targets: Sequence[RadarTarget], triggered: set[int], limit_for: Callable[[Direction], float], hud: HudInfo) -> np.ndarray` (new array, same shape). Wedge polygon and ring pixel coordinates are computed once in `__init__`.
 
-Drawing (spec §5.8, mockup https://claude.ai/artifact/JZsmwtN8qDbNDdmHxHXnpP style B), scaled from the 1296-px-wide mockup by `width / 1296`:
+Drawing (spec §5.8, approved mockup, style B), scaled from the 1296-px-wide mockup by `width / 1296`:
 - Wedge: translucent white fill fading with distance (alpha 0.22 near → 0.04 far), outline alpha 0.55, dashed range rings at `overlay.show.range_rings` with `"N m"` labels at the left/right edge.
 - Full mode, per track: corner brackets (length 25 % of the shorter box side, 3.5 px) in the direction color when reliable, dashed gray otherwise; side tag 168 × 64 px left of the box (right if it would leave the frame), dark fill alpha 0.86 with a 1.5 px border in the track color, leader line from the box top-left to the tag. Tag text: speed (30 px bold, red if over `limit_for(direction)`) + `km/h`, `▼ #id` (coming) or `▲ #id` (going) right-aligned, `"{d} m · {±a}° · SNR {s}"` in mono 11.5 px. Gray tag: `#id NO RADAR` and `last N km/h · X.X s` (or `no reading` if never matched). Triggered tracks: red badge `+{speed − limit}` / `● CAPTURED` next to the tag.
 - Lite mode, per subject's latest target: pillar at the radar road point, `lite.pillar_height_m` tall, width = 1° at that distance (min 6 px), ground ellipse ±0.5 m, label chip above (speed, arrow, details strip).

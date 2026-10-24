@@ -1331,22 +1331,10 @@ wheels = [
 [[package]]
 name = "ld2451"
 version = "0.1.0"
-source = { editable = "../driver-hlk-ld2451" }
+source = { git = "https://github.com/bfMendonca/ld2451.git?branch=main#e2fda7d12243a79a2d3e3407361b1f7a5903ee11" }
 dependencies = [
     { name = "pyserial" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10" },
-    { name = "pyserial", specifier = ">=3.4" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5" },
-    { name = "types-pyserial", marker = "extra == 'dev'" },
-]
-provides-extras = ["dev"]
 
 [[package]]
 name = "librt"
@@ -2926,28 +2914,10 @@ wheels = [
 [[package]]
 name = "radar-cam-recorder"
 version = "0.1.0"
-source = { editable = "../radar-cam-recorder" }
+source = { git = "https://github.com/bfMendonca/radar-cam-recorder.git?branch=master#8dcb7d5f184096b7154f84b92324a15070e12e6f" }
 dependencies = [
     { name = "ld2451" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "ld2451", editable = "../driver-hlk-ld2451" },
-    { name = "tomli", marker = "python_full_version < '3.11'" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mypy", specifier = ">=1.10,<1.20" },
-    { name = "pytest-cov", specifier = ">=4" },
-    { name = "ruff", specifier = ">=0.5" },
-    { name = "types-pyserial" },
-]
-test = [
-    { name = "hypothesis", specifier = ">=6.100,<6.142" },
-    { name = "pytest", specifier = ">=7" },
 ]
 
 [[package]]
@@ -3474,13 +3444,13 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "av", specifier = ">=12" },
-    { name = "ld2451", editable = "../driver-hlk-ld2451" },
+    { name = "ld2451", git = "https://github.com/bfMendonca/ld2451.git?branch=main" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "opencv-python", specifier = ">=4.9" },
     { name = "pillow", specifier = ">=10" },
     { name = "pydantic", specifier = ">=2.6" },
     { name = "pyyaml", specifier = ">=6" },
-    { name = "radar-cam-recorder", editable = "../radar-cam-recorder" },
+    { name = "radar-cam-recorder", git = "https://github.com/bfMendonca/radar-cam-recorder.git?branch=master" },
     { name = "rfdetr", marker = "extra == 'rfdetr'", specifier = ">=1.2" },
     { name = "scipy", specifier = ">=1.11" },
     { name = "supervision", specifier = ">=0.25" },
