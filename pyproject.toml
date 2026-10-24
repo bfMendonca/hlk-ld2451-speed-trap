@@ -52,7 +52,7 @@ yolo = ["ultralytics>=8.3"]  # AGPL-3.0 terms apply
 speed-trap = "speed_trap.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.5", "mypy>=1.10", "types-PyYAML"]
+dev = ["pytest>=8", "pytest-github-actions-annotate-failures>=0.3", "ruff>=0.5", "mypy>=1.10", "types-PyYAML"]
 
 [tool.uv]
 default-groups = ["dev"]
