@@ -2914,7 +2914,7 @@ wheels = [
 [[package]]
 name = "radar-cam-recorder"
 version = "0.1.0"
-source = { git = "https://github.com/bfMendonca/radar-cam-recorder.git?branch=master#8dcb7d5f184096b7154f84b92324a15070e12e6f" }
+source = { git = "https://github.com/bfMendonca/radar-cam-recorder.git?branch=master#64132629258a49c26fa8a1a7a9bfab7626080533" }
 dependencies = [
     { name = "ld2451" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
