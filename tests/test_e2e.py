@@ -216,8 +216,10 @@ def test_detector_runs_every_n_frames(tmp_path: Path, synth_session: Path) -> No
     source = RecordedSessionSource(synth_session, cfg.radar, segments=[1])
     det = CountingDetector()
     progress: list[tuple[int, int]] = []
+    # No wall-clock progress: on a slow machine the segment can take longer than the
+    # default interval and add a mid-segment report.
     counters = Pipeline(cfg, source, tmp_path / "out", "full", det).run(
-        lambda seg, n, _fps: progress.append((seg, n))
+        lambda seg, n, _fps: progress.append((seg, n)), progress_interval_s=float("inf")
     )
     frames = source.frame_counts[1]
     assert counters["frames"] == frames
