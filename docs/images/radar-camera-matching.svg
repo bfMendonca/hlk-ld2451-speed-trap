@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 836" width="1280" height="836" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <title>How a radar reading is matched to a camera detection</title>
+  <desc>Schematic, not to scale: the radar's bearing is compared with the range of bearings the car's box covers in the image.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5b6572"/>
+    </marker>
+    <style>
+      .t { fill: #1c232b; }
+      .sub { fill: #5b6572; }
+      .h { font-size: 20px; font-weight: 700; }
+      .l { font-size: 14px; }
+      .s { font-size: 13px; }
+      .cam { fill: #35d0ba; stroke: #1f9c8a; }
+      .rad { fill: #ffb547; stroke: #c98714; }
+    </style>
+  </defs>
+
+  <rect width="1280" height="836" fill="#f7f9fb"/>
+  <text x="640" y="38" text-anchor="middle" class="t h" font-size="24">Radar × camera matching: by bearing (azimuth)</text>
+  <text x="640" y="62" text-anchor="middle" class="sub l">Schematic, not to scale. The radar's bearing must fall inside the range of bearings that the car's box covers in the image.</text>
+
+  <!-- ============ LEFT: top-down ============ -->
+  <rect x="30" y="80" width="600" height="470" rx="10" fill="#ffffff" stroke="#d5dbe2"/>
+  <text x="50" y="108" class="t h">Top-down view</text>
+  <text x="50" y="128" class="sub s">camera and radar look straight ahead; negative angle = right, as in the video</text>
+
+  <!-- field of view -->
+  <path d="M330,500 L97,267 A330,330 0 0 1 563,267 Z" fill="#eef2f6" stroke="#cfd6de" stroke-dasharray="4 4"/>
+  <line x1="330" y1="500" x2="330" y2="215" stroke="#aab4bf" stroke-dasharray="5 5"/>
+
+  <!-- gate with margin (light) -->
+  <polygon points="330,500 348.8,140.5 459,163.9" fill="#ffb547" fill-opacity="0.18" stroke="#c98714" stroke-opacity="0.55" stroke-dasharray="6 4"/>
+  <!-- box span (dark) -->
+  <polygon points="330,500 377,143 432.2,154.8" fill="#35d0ba" fill-opacity="0.38" stroke="#1f9c8a"/>
+
+  <!-- car -->
+  <rect x="368" y="190" width="48" height="34" rx="6" fill="#4b5563"/>
+  <rect x="373" y="195" width="38" height="10" rx="3" fill="#9aa5b1"/>
+
+  <!-- radar ray + reading inside the gate -->
+  <line x1="330" y1="500" x2="378.6" y2="224.3" stroke="#c98714" stroke-width="2" stroke-dasharray="3 4"/>
+  <path d="M330,380 A120,120 0 0 1 350.8,381.8" fill="none" stroke="#c98714" stroke-width="2"/>
+  <text x="358" y="392" class="t s" fill="#8a5a0a">−10°</text>
+  <polygon points="378.6,212 391,224.3 378.6,236.6 366.2,224.3" class="rad" stroke-width="2"/>
+
+  <!-- readings outside the gate -->
+  <g stroke="#8a95a3" stroke-width="3" stroke-linecap="round">
+    <line x1="456" y1="282" x2="469" y2="294"/><line x1="469" y1="282" x2="456" y2="294"/>
+    <line x1="275" y1="300" x2="288" y2="312"/><line x1="288" y1="300" x2="275" y2="312"/>
+  </g>
+
+  <!-- camera + radar rig -->
+  <rect x="318" y="498" width="14" height="14" rx="2" class="cam" stroke-width="2"/>
+  <rect x="300" y="500" width="14" height="10" rx="2" class="rad" stroke-width="2"/>
+  <text x="330" y="534" text-anchor="middle" class="t l">camera + radar</text>
+  <text x="330" y="552" text-anchor="middle" class="sub s">(radar ≈ 5 cm to the left)</text>
+
+  <!-- annotations left -->
+  <line x1="436" y1="168" x2="470" y2="150" stroke="#5b6572"/>
+  <text x="476" y="146" class="t l" font-weight="600">box span</text>
+  <text x="476" y="163" class="sub s">centre ± half-width</text>
+
+  <line x1="462" y1="178" x2="470" y2="200" stroke="#5b6572"/>
+  <text x="476" y="203" class="t l" font-weight="600">association window</text>
+  <text x="476" y="220" class="sub s">+ 0.5° + margin</text>
+
+  <line x1="392" y1="224" x2="470" y2="248" stroke="#5b6572"/>
+  <text x="476" y="252" class="t l" font-weight="600">radar reading</text>
+  <text x="476" y="269" class="sub s">inside the window: match</text>
+
+  <text x="476" y="330" class="t l" font-weight="600">outside the window</text>
+  <text x="476" y="347" class="sub s">another object: ignored</text>
+
+  <!-- ============ RIGHT: camera image ============ -->
+  <rect x="650" y="80" width="600" height="470" rx="10" fill="#ffffff" stroke="#d5dbe2"/>
+  <text x="670" y="108" class="t h">Camera image</text>
+  <text x="670" y="128" class="sub s">each pixel column is a bearing (azimuth), no distance needed</text>
+
+  <rect x="680" y="145" width="540" height="270" rx="6" fill="#dfe6ec" stroke="#b9c3ce"/>
+  <polygon points="680,415 1220,415 1220,330 680,330" fill="#c4ccd5"/>
+  <line x1="950" y1="145" x2="950" y2="415" stroke="#aab4bf" stroke-dasharray="5 5"/>
+
+  <!-- margin band + box -->
+  <rect x="974" y="145" width="144" height="270" fill="#ffb547" fill-opacity="0.16"/>
+  <rect x="1010" y="270" width="72" height="56" rx="4" fill="none" stroke="#1f9c8a" stroke-width="3"/>
+  <rect x="1016" y="278" width="60" height="28" rx="4" fill="#4b5563"/>
+  <text x="1046" y="262" text-anchor="middle" class="t s" font-weight="600">box (x₀ … x₁)</text>
+
+  <!-- radar bearing -->
+  <line x1="1030" y1="145" x2="1030" y2="470" stroke="#c98714" stroke-width="2.5"/>
+  <polygon points="1030,148 1038,160 1022,160" class="rad" stroke-width="1.5"/>
+  <text x="1040" y="172" class="t s" fill="#8a5a0a" font-weight="600">radar bearing</text>
+
+  <!-- gray reading outside -->
+  <line x1="1206" y1="145" x2="1206" y2="470" stroke="#8a95a3" stroke-width="2" stroke-dasharray="6 5"/>
+  <text x="1200" y="172" text-anchor="end" class="sub s">outside</text>
+
+  <!-- azimuth axis -->
+  <line x1="680" y1="470" x2="1220" y2="470" stroke="#5b6572"/>
+  <g stroke="#5b6572"><line x1="950" y1="464" x2="950" y2="476"/><line x1="1030" y1="464" x2="1030" y2="476"/><line x1="1110" y1="464" x2="1110" y2="476"/></g>
+  <text x="950" y="492" text-anchor="middle" class="t s">0°</text>
+  <text x="1030" y="492" text-anchor="middle" class="t s">−10°</text>
+  <text x="1110" y="492" text-anchor="middle" class="t s">−20°</text>
+  <text x="700" y="492" class="sub s">azimuth (right is negative)</text>
+
+  <!-- projection of the box onto the axis -->
+  <g stroke="#1f9c8a" stroke-dasharray="3 3"><line x1="1010" y1="326" x2="1010" y2="508"/><line x1="1082" y1="326" x2="1082" y2="508"/></g>
+  <path d="M1010,512 L1082,512" stroke="#1f9c8a" stroke-width="3"/>
+  <text x="1046" y="532" text-anchor="middle" class="t s" fill="#14715f" font-weight="600">box span</text>
+  <text x="700" y="528" class="sub s">light amber band = window (box + margin)</text>
+
+  <!-- ============ BOTTOM: pipeline ============ -->
+  <g>
+    <rect x="30" y="580" width="278" height="112" rx="10" fill="#ffffff" stroke="#d5dbe2"/>
+    <circle cx="56" cy="606" r="14" fill="#35d0ba"/><text x="56" y="611" text-anchor="middle" class="t l" font-weight="700">1</text>
+    <text x="80" y="611" class="t l" font-weight="700">Car box</text>
+    <text x="46" y="640" class="sub s">detector + ByteTrack give the box</text>
+    <text x="46" y="660" class="sub s">(x₀, x₁, y) on every frame</text>
+
+    <rect x="332" y="580" width="278" height="112" rx="10" fill="#ffffff" stroke="#d5dbe2"/>
+    <circle cx="358" cy="606" r="14" fill="#35d0ba"/><text x="358" y="611" text-anchor="middle" class="t l" font-weight="700">2</text>
+    <text x="382" y="611" class="t l" font-weight="700">Box bearing</text>
+    <text x="348" y="640" class="sub s">ray of each edge → azimuth,</text>
+    <text x="348" y="660" class="sub s">no ground plane: centre ± half-width</text>
+
+    <rect x="634" y="580" width="278" height="112" rx="10" fill="#ffffff" stroke="#d5dbe2"/>
+    <circle cx="660" cy="606" r="14" fill="#ffb547"/><text x="660" y="611" text-anchor="middle" class="t l" font-weight="700">3</text>
+    <text x="684" y="611" class="t l" font-weight="700">Window</text>
+    <text x="650" y="640" class="sub s">|camera az − radar angle|</text>
+    <text x="650" y="660" class="sub s">≤ half-width + 0.5° + margin</text>
+
+    <rect x="936" y="580" width="314" height="112" rx="10" fill="#ffffff" stroke="#d5dbe2"/>
+    <circle cx="962" cy="606" r="14" fill="#ffb547"/><text x="962" y="611" text-anchor="middle" class="t l" font-weight="700">4</text>
+    <text x="986" y="611" class="t l" font-weight="700">Assignment</text>
+    <text x="952" y="640" class="sub s">one reading per car (Hungarian); two</text>
+    <text x="952" y="660" class="sub s">close or tied candidates:</text>
+    <text x="952" y="678" class="sub s">dropped, never guessed</text>
+  </g>
+  <g stroke="#5b6572" stroke-width="2" marker-end="url(#arrow)">
+    <line x1="310" y1="636" x2="330" y2="636"/><line x1="612" y1="636" x2="632" y2="636"/><line x1="914" y1="636" x2="934" y2="636"/>
+  </g>
+
+  <!-- ============ RESULT ============ -->
+  <rect x="30" y="710" width="1220" height="108" rx="10" fill="#eaf8f5" stroke="#9ad7cc"/>
+  <text x="50" y="738" class="t l" font-weight="700">Result</text>
+  <text x="50" y="762" class="t s">The car inherits the radar's speed, direction (approaching or receding), distance and SNR. Speeding: speed above the limit on consecutive readings.</text>
+  <text x="50" y="784" class="t s">The camera gives no distance or speed (unreliable with a single low camera).</text>
+  <text x="50" y="804" class="t s">The camera bearing is placed at the radar's own range, so the offset between the two causes no parallax.</text>
+</svg>

@@ -191,6 +191,28 @@ flowchart LR
 | At least one *verified* reading before a capture | A brand-new track being captured on position alone |
 | Raw radial speed by default (cosine correction off) | Overstating speed: the radial component reads slightly low |
 
+### Matching on bearing (`fusion.match_on: azimuth`)
+
+By default, fusion places each box on the road plane and compares range and bearing with the
+radar reading. From a low camera that range is unreliable. With `fusion.match_on: azimuth`, a
+radar reading goes to the vehicle whose box covers its bearing, with no camera range, speed or
+direction involved. Two vehicles on one bearing are still dropped as ambiguous.
+
+<p align="center"><img src="docs/images/radar-camera-matching.svg" alt="Radar-to-camera matching by bearing: the radar angle must fall inside the range of bearings covered by the car's box, plus a margin" width="90%"></p>
+
+What this mode needs from the calibration:
+
+- **Camera intrinsics** (or the nominal OV5647 field of view) and the pose **yaw, pitch and
+  roll**: they turn a pixel column into a bearing. The camera height is not used for matching.
+- **`radar.boresight.yaw_deg` and `radar.angle_sign`**: the angle between the radar axis and the
+  camera axis. Use 0 for a rigid mount where both point the same way.
+- **`radar.offset_m`**: the camera bearing is placed at the radar's own range, so the offset only
+  matters for close vehicles. The radar height (camera height plus the `z` offset) only converts
+  the radar's slant distance to ground range for `fusion.max_range_m`.
+- **`radar.clock_offset_ms`**: matters for crossing traffic.
+- **`fusion.gate.angle_margin_deg`**: tolerance added to the box's half-width and the radar's
+  0.5° step; the radar's angle typically jitters by 1–5°.
+
 ## Installation
 
 Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/). The radar driver and the session
@@ -265,7 +287,7 @@ range. Unknown keys and out-of-range values are errors that name the dotted key,
 | `road` | lane heading (for the optional cosine correction) |
 | `detector` | backend (`rfdetr`, `ultralytics`, `ground_truth`), weights, device, `imgsz` (default 512), thresholds, classes, region of interest, `every_n_frames` |
 | `tracker` | ByteTrack thresholds and the lost-track timeout in seconds |
-| `fusion` | gates, ambiguity ratio, `max_range_m`, scan age, speed tolerance, optional lane boundaries, reliability rules |
+| `fusion` | `match_on` (`range_azimuth` or `azimuth`), gates, ambiguity ratio, `max_range_m`, scan age, speed tolerance, optional lane boundaries, reliability rules |
 | `speed` | limit (with optional per-direction overrides) and the cosine correction (off) |
 | `capture` | on/off, consecutive over-limit readings, crop margin, full frame, JPEG quality |
 | `overlay`, `lite` | what to draw, colors, pillar height |
@@ -311,6 +333,8 @@ Fusion is only as good as the geometry, so set it up before trusting full-mode c
 - **Radial speed.** The radar measures the speed along its line of sight, which reads slightly
   low. The cosine correction is off by default so captures never overstate.
 - **Stationary vehicles** are not reported by the radar and stay gray.
+- **Bearing matching** (`match_on: azimuth`) ignores `fusion.lanes`, and several readings of one
+  car inside one track's window are dropped as ambiguous, so such cars get fewer matches.
 - **Lite mode identity swaps.** Without a camera, two vehicles overtaking in the same lane can
   swap radar subjects; this can add a capture but never raises a reading.
 - **Frame gaps.** Radar reports from a camera outage longer than `fusion.max_scan_age_s` are not
