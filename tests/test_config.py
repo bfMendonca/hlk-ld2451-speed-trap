@@ -150,4 +150,4 @@ def test_fusion_match_on_default_and_validation() -> None:
     assert FusionConfig().match_on == "range_azimuth"
     assert FusionConfig(match_on="azimuth").match_on == "azimuth"
     with pytest.raises(ValidationError):
-        FusionConfig(match_on="nope")  # type: ignore[arg-type]
+        FusionConfig(match_on="nope")

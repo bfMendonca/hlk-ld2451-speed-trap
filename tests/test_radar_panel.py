@@ -135,7 +135,8 @@ def test_empty_scan_draws_grid_only() -> None:
 
 
 def _paints(img: np.ndarray, hex_color: str, tol: int = 8) -> np.ndarray:
-    return np.abs(img.astype(int) - np.array(_hex_to_bgr(hex_color))).max(axis=2) <= tol
+    mask: np.ndarray = np.abs(img.astype(int) - np.array(_hex_to_bgr(hex_color))).max(axis=2) <= tol
+    return mask
 
 
 def test_dot_color_by_direction_and_side() -> None:

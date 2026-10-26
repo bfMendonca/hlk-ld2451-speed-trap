@@ -252,7 +252,7 @@ def test_gate_cost_values() -> None:
     assert gate_cost(radar, cfg, (29.5, 0), target(0, 31)) is None
 
 
-AZ = FusionConfig(match_on="azimuth", max_range_m=60.0, gate={"angle_margin_deg": 1.0})  # type: ignore[arg-type]
+AZ = FusionConfig(match_on="azimuth", max_range_m=60.0, gate={"angle_margin_deg": 1.0})
 
 
 def test_azimuth_mode_ignores_camera_range_and_speed() -> None:
