@@ -252,6 +252,79 @@ def test_gate_cost_values() -> None:
     assert gate_cost(radar, cfg, (29.5, 0), target(0, 31)) is None
 
 
+AZ = FusionConfig(match_on="azimuth", max_range_m=60.0, gate={"angle_margin_deg": 1.0})
+
+
+def test_azimuth_mode_ignores_camera_range_and_speed() -> None:
+    def run(cfg: FusionConfig) -> int:
+        f = fusion(cfg)
+        o = obs_at_road(20, 0, track_id=1)  # static track, radar says 45 m and 40 km/h
+        for t in (0.0, 0.6):
+            f.update([o], [scan(target(0, 45, speed=40, t_ns=ts(t)))], ts(t))
+        return len(track(f).matches)
+
+    assert (
+        run(FusionConfig(max_range_m=60.0, gate={"angle_margin_deg": 1.0})) == 0
+    )  # range/speed gates reject it
+    assert run(AZ) == 2  # camera range, speed and direction are never consulted
+
+
+def test_azimuth_gate_is_the_box_span_plus_margin() -> None:
+    # box is +-20 px wide at 1285 px focal length: half span 0.9 deg, gate = 0.9 + 0.5 + 1.0
+    def matches(angle: int) -> int:
+        f = fusion(AZ)
+        f.update([obs_at_road(20, 0, track_id=1)], [scan(target(angle, 20, t_ns=0))], 0)
+        return len(track(f).matches)
+
+    assert matches(2) == 1 and matches(-2) == 1
+    assert matches(3) == 0 and matches(-3) == 0
+
+
+def test_azimuth_mode_two_cars_on_one_bearing_is_ambiguous() -> None:
+    f = fusion(AZ)
+    near, far = obs_at_road(20, 0, track_id=1), obs_at_road(35, 0, track_id=2)
+    f.update([near, far], [scan(target(0, 20, t_ns=0))], 0)
+    assert track(f, 1).matches == [] and track(f, 2).matches == []
+
+
+def test_azimuth_mode_direction_comes_from_the_radar() -> None:
+    f = fusion(AZ)
+    for k in range(3):  # camera says the car moves away, radar says approaching
+        t = ts(0.1 * k)
+        f.update([obs_at_road(20 + 5 * k, 0, track_id=1)], [scan(target(0, 25, t_ns=t))], t)
+    assert track(f).direction == "coming"
+    assert len(track(f).matches) >= 2
+
+
+def test_azimuth_mode_works_above_the_horizon() -> None:
+    f = fusion(AZ)
+    o = TrackObservation(1, (600.0, 100.0, 640.0, 200.0), 0.9, "car", True)  # no ground point
+    assert make_camera().backproject_ground(620.0, 200.0) is None
+    f.update([o], [scan(target(1, 40, t_ns=0))], 0)
+    assert len(track(f).matches) == 1
+
+
+def test_azimuth_matches_count_as_verified() -> None:
+    f = fusion(AZ)
+    f.update([obs_at_road(20, 0, track_id=1)], [scan(target(0, 20, t_ns=0))], 0)
+    assert [m.verified for m in track(f).matches] == [True]  # lite mode does the same
+
+
+def test_azimuth_mode_corrects_parallax_from_the_radar_offset() -> None:
+    # radar 0.3 m left of the camera, car straight ahead of the camera at 5 m: the radar sees it
+    # about 3.4 deg to the right, which a far-away bearing approximation would miss.
+    radar = RadarModel((0.0, 0.3), 3.5, 0.0, 1, 20.0, 1.0, 100.0)
+    f = Fusion(make_camera(), radar, AZ, SpeedConfig(), RoadConfig())
+    uv, _ = make_camera().project(np.array([[5.0, 0.0, 0.0]]))
+    u, v = float(uv[0][0]), float(uv[0][1])
+    f.update(
+        [TrackObservation(1, (u - 20, v - 30, u + 20, v), 0.9, "car", True)],
+        [scan(target(-3, 6, t_ns=0))],
+        0,
+    )
+    assert len(track(f).matches) == 1
+
+
 def test_track_history_and_speed_stats() -> None:
     f = fusion()
     o = obs_at_road(20, 0, track_id=1)

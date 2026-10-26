@@ -44,6 +44,9 @@ tracker:
   match_threshold: 0.8               # 0..1
   minimum_consecutive_frames: 1      # frames before a track is confirmed (>= 1)
 fusion:
+  match_on: range_azimuth  # range_azimuth | azimuth. azimuth: a radar reading is matched to the
+                           # vehicle whose box spans its bearing; camera range, speed and direction
+                           # are not used (the radar's own direction is kept). Needs no ground plane.
   gate:
     range_base_m: 1.5      # base range gate, m (> 0)
     range_per_m2: 0.002    # extra gate per m^2 of range, m (>= 0)
@@ -76,10 +79,18 @@ capture:
 overlay:
   style: tag               # only "tag" exists in v1
   show:
-    wedge: true            # radar field-of-view wedge
+    wedge: false           # radar field-of-view wedge drawn over the image
     range_rings: [10, 20, 40, 70]  # ring distances, m (> 0)
     hud: true              # heads-up display
   colors: { coming: "#35d0ba", going: "#ffb547", none: "#a7afb8", alert: "#ff4d5e" }  # #rrggbb
+  radar_panel:             # top-down radar summary strip to the right of the video
+    enabled: true
+    width_frac: 0.333      # strip width as a fraction of the frame width, (0, 1]
+    trail_s: 3.5           # readings fade out over this long, s (> 0)
+    min_speed_kmh: 15      # hide slower readings (clutter), km/h (>= 0)
+    max_range_m: 50        # ground range shown, m (> 0)
+    fov_half_deg: 45       # half angle shown, degrees (0, 90]
+    max_rows: 6            # rows in the table of current readings (>= 1)
 lite:
   pillar_height_m: 1.6     # assumed height of the tracked point above the road, m (> 0)
   lost_track_s: 1.5        # drop a lite track after this long, s (> 0)

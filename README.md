@@ -29,9 +29,9 @@
 
 <br>
 
-<img src="docs/images/demo-full.gif" alt="Annotated overlay: vehicles tracked with corner brackets, radar speed tags, the radar coverage wedge on the road, and a speeding car captured" width="85%">
+<img src="docs/images/demo-full.gif" alt="Annotated overlay on a real recording: two cars tracked with corner brackets and radar speed tags, both captured as speeders, with the radar side panel on the right" width="85%">
 
-<sub>Full mode on a synthetic session. A coming car at 56 km/h (limit 40) is matched to the radar and captured. Real-road footage is coming soon.</sub>
+<sub>Full mode on a real recording (session s000064, limit 40 km/h). Two coming cars, at 42 and 46 km/h by radar, are tracked, matched to the radar and captured. The strip on the right is the radar's own view: a top-down fan with a fading trail and a table of the current readings.</sub>
 
 </div>
 
@@ -73,8 +73,14 @@ capture is made.
   the Pi's real frame rate is irregular (about 20–22 fps, with dropped frames and gaps).
 - **Lite mode**: no detector at all. Each radar target is drawn as a pillar on the road, which
   makes it fast on any laptop and the right tool for checking calibration.
-- **Professional overlay**: corner brackets, speed tags with leader lines, the radar coverage
-  wedge with range rings, and a HUD with session time, legend and the speed limit.
+- **Professional overlay**: corner brackets, speed tags with leader lines and a HUD with session
+  time, legend and the speed limit. The radar coverage wedge with range rings is still available
+  (`overlay.show.wedge`) but off by default.
+- **Radar side panel**: a strip to the right of the overlay video with a top-down fan of the
+  radar's own readings (3.5 s fading trail, coloured by direction) and a table of the current
+  readings: speed, distance, angle, SNR, direction. It uses only radar data, never the camera
+  calibration or fusion, and hides readings under 15 km/h. Configure it under
+  `overlay.radar_panel`; the output video grows by `width_frac` (default one third).
 - **Speeder captures**: the best frame of each pass (largest box, not cut by the frame edge),
   a JSON sidecar with the full radar history, and the config hash for traceability.
 - **YAML-first configuration**: one validated config file, `--set key=value` overrides, and a
@@ -88,7 +94,7 @@ capture is made.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/overlay-full.jpg" alt="Full mode: detector boxes with radar speed tags"></td>
+    <td width="50%"><img src="docs/images/overlay-full.jpg" alt="Full mode on a real recording: detector boxes with radar speed tags and the radar side panel"></td>
     <td width="50%"><img src="docs/images/demo-lite.gif" alt="Lite mode: radar targets drawn as pillars on the road"></td>
   </tr>
   <tr>
@@ -185,6 +191,28 @@ flowchart LR
 | At least one *verified* reading before a capture | A brand-new track being captured on position alone |
 | Raw radial speed by default (cosine correction off) | Overstating speed: the radial component reads slightly low |
 
+### Matching on bearing (`fusion.match_on: azimuth`)
+
+By default, fusion places each box on the road plane and compares range and bearing with the
+radar reading. From a low camera that range is unreliable. With `fusion.match_on: azimuth`, a
+radar reading goes to the vehicle whose box covers its bearing, with no camera range, speed or
+direction involved. Two vehicles on one bearing are still dropped as ambiguous.
+
+<p align="center"><img src="docs/images/radar-camera-matching.svg" alt="Radar-to-camera matching by bearing: the radar angle must fall inside the range of bearings covered by the car's box, plus a margin" width="90%"></p>
+
+What this mode needs from the calibration:
+
+- **Camera intrinsics** (or the nominal OV5647 field of view) and the pose **yaw, pitch and
+  roll**: they turn a pixel column into a bearing. The camera height is not used for matching.
+- **`radar.boresight.yaw_deg` and `radar.angle_sign`**: the angle between the radar axis and the
+  camera axis. Use 0 for a rigid mount where both point the same way.
+- **`radar.offset_m`**: the camera bearing is placed at the radar's own range, so the offset only
+  matters for close vehicles. The radar height (camera height plus the `z` offset) only converts
+  the radar's slant distance to ground range for `fusion.max_range_m`.
+- **`radar.clock_offset_ms`**: matters for crossing traffic.
+- **`fusion.gate.angle_margin_deg`**: tolerance added to the box's half-width and the radar's
+  0.5° step; the radar's angle typically jitters by 1–5°.
+
 ## Installation
 
 Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/). The radar driver and the session
@@ -222,7 +250,9 @@ uv run speed-trap process demo/s000001 --config demo/cfg.yaml --capture \
 uv run speed-trap process ~/recordings/s000012 --config cfg.yaml --capture
 ```
 
-Outputs land in `out/<session_id>/` unless you pass `--out`.
+Outputs land in `out/<session_id>/` (`--out DIR` changes the parent to `DIR/<session_id>/`).
+A run never overwrites an earlier one: if that folder exists, it writes `<session_id>-2/`,
+`-3/`, and so on.
 
 ## Command line
 
@@ -230,7 +260,7 @@ Outputs land in `out/<session_id>/` unless you pass `--out`.
 speed-trap process SESSION_DIR --config cfg.yaml
            [--segment N ...] [--start S] [--end S]     # seconds from session start
            [--mode full|lite] [--device cpu|mps|cuda]
-           [--out DIR] [--capture/--no-capture]
+           [--out DIR] [--capture/--no-capture]        # writes DIR/<session>[-N]
            [--set KEY=VALUE ...]                       # dotted key, e.g. speed.limit_kmh=50
            [-v/-vv]
 speed-trap init-config PATH
@@ -257,7 +287,7 @@ range. Unknown keys and out-of-range values are errors that name the dotted key,
 | `road` | lane heading (for the optional cosine correction) |
 | `detector` | backend (`rfdetr`, `ultralytics`, `ground_truth`), weights, device, `imgsz` (default 512), thresholds, classes, region of interest, `every_n_frames` |
 | `tracker` | ByteTrack thresholds and the lost-track timeout in seconds |
-| `fusion` | gates, ambiguity ratio, `max_range_m`, scan age, speed tolerance, optional lane boundaries, reliability rules |
+| `fusion` | `match_on` (`range_azimuth` or `azimuth`), gates, ambiguity ratio, `max_range_m`, scan age, speed tolerance, optional lane boundaries, reliability rules |
 | `speed` | limit (with optional per-direction overrides) and the cosine correction (off) |
 | `capture` | on/off, consecutive over-limit readings, crop margin, full frame, JPEG quality |
 | `overlay`, `lite` | what to draw, colors, pillar height |
@@ -303,6 +333,8 @@ Fusion is only as good as the geometry, so set it up before trusting full-mode c
 - **Radial speed.** The radar measures the speed along its line of sight, which reads slightly
   low. The cosine correction is off by default so captures never overstate.
 - **Stationary vehicles** are not reported by the radar and stay gray.
+- **Bearing matching** (`match_on: azimuth`) ignores `fusion.lanes`, and several readings of one
+  car inside one track's window are dropped as ambiguous, so such cars get fewer matches.
 - **Lite mode identity swaps.** Without a camera, two vehicles overtaking in the same lane can
   swap radar subjects; this can add a capture but never raises a reading.
 - **Frame gaps.** Radar reports from a camera outage longer than `fusion.max_scan_age_s` are not

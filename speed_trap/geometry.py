@@ -91,6 +91,13 @@ class CameraModel:
         uv, _ = cv2.projectPoints(pts, self._rvec, self._tvec, self.K, self.dist)
         return uv.reshape(-1, 2), in_front
 
+    def ray_azimuth_deg(self, u: float, v: float) -> float:
+        """Azimuth of the pixel's viewing ray in the road frame (positive = left); no ground hit."""
+        pt = np.array([[[u, v]]], dtype=np.float64)
+        xn, yn = cv2.undistortPoints(pt, self.K, self.dist).reshape(2)
+        ray = self.R.T @ np.array([xn, yn, 1.0])
+        return math.degrees(math.atan2(ray[1], ray[0]))
+
     def backproject_ground(self, u: float, v: float) -> tuple[float, float] | None:
         """Pixel -> road (x, y) on the ground plane, or None if the ray misses it."""
         pt = np.array([[[u, v]]], dtype=np.float64)

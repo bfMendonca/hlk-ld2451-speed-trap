@@ -157,3 +157,17 @@ def test_range_ring_is_constant_range() -> None:
     pts = range_ring(radar, 20.0)
     gs = [radar.road_to_polar(x, y)[0] for x, y, _ in pts]
     assert gs == pytest.approx([20.0] * len(gs))
+
+
+def test_ray_azimuth_needs_no_ground_hit() -> None:
+    cam = CameraModel.from_config(cfg_with(pitch_deg=5.0), 1296, 972)
+    f = 1000.0
+    assert cam.ray_azimuth_deg(648.0, 100.0) == pytest.approx(0.0, abs=1e-6)  # above the horizon
+    assert cam.backproject_ground(648.0, 100.0) is None
+    right = cam.ray_azimuth_deg(648.0 + f * math.tan(math.radians(7)), 486.0)
+    assert right < 0  # image right is negative azimuth (road Y is left)
+    assert right == pytest.approx(
+        -math.degrees(math.atan(math.tan(math.radians(7)) / math.cos(math.radians(5)))), abs=0.3
+    )
+    left_yawed = CameraModel.from_config(cfg_with(yaw_deg=10.0), 1296, 972)
+    assert left_yawed.ray_azimuth_deg(648.0, 486.0) == pytest.approx(10.0, abs=1e-6)

@@ -124,7 +124,7 @@ def test_unreliable_track_bracket_is_gray_and_dashed() -> None:
 
 def test_wedge_changes_ground_not_sky() -> None:
     img = gray_image()
-    out = render(make_renderer(), img)
+    out = render(make_renderer(OverlayConfig.model_validate({"show": {"wedge": True}})), img)
     assert (out[900, 648] != img[900, 648]).any()
     assert (out[100, 648] == img[100, 648]).all()
 
