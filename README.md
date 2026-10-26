@@ -29,9 +29,9 @@
 
 <br>
 
-<img src="docs/images/demo-full.gif" alt="Annotated overlay: vehicles tracked with corner brackets, radar speed tags, the radar coverage wedge on the road, and a speeding car captured" width="85%">
+<img src="docs/images/demo-full.gif" alt="Annotated overlay on a real recording: two cars tracked with corner brackets and radar speed tags, both captured as speeders, with the radar side panel on the right" width="85%">
 
-<sub>Full mode on a synthetic session. A coming car at 56 km/h (limit 40) is matched to the radar and captured. Real-road footage is coming soon.</sub>
+<sub>Full mode on a real recording (session s000064, limit 40 km/h). Two coming cars, at 42 and 46 km/h by radar, are tracked, matched to the radar and captured. The strip on the right is the radar's own view: a top-down fan with a fading trail and a table of the current readings.</sub>
 
 </div>
 
@@ -94,7 +94,7 @@ capture is made.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/overlay-full.jpg" alt="Full mode: detector boxes with radar speed tags"></td>
+    <td width="50%"><img src="docs/images/overlay-full.jpg" alt="Full mode on a real recording: detector boxes with radar speed tags and the radar side panel"></td>
     <td width="50%"><img src="docs/images/demo-lite.gif" alt="Lite mode: radar targets drawn as pillars on the road"></td>
   </tr>
   <tr>
