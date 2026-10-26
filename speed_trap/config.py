@@ -142,6 +142,7 @@ class GateConfig(_Strict):
 
 
 class FusionConfig(_Strict):
+    match_on: Literal["range_azimuth", "azimuth"] = "range_azimuth"
     gate: GateConfig = Field(default_factory=GateConfig)
     ambiguity_ratio: float = Field(0.7, gt=0, le=1)
     max_range_m: float = Field(30.0, gt=0)
@@ -175,7 +176,7 @@ class CaptureConfig(_Strict):
 
 
 class OverlayShowConfig(_Strict):
-    wedge: bool = True
+    wedge: bool = False
     range_rings: list[float] = Field(default_factory=lambda: [10.0, 20.0, 40.0, 70.0])
     hud: bool = True
 
@@ -205,10 +206,21 @@ class OverlayColors(_Strict):
         return v
 
 
+class RadarPanelConfig(_Strict):
+    enabled: bool = True
+    width_frac: float = Field(0.333, gt=0, le=1)
+    trail_s: float = Field(3.5, gt=0)
+    min_speed_kmh: float = Field(15.0, ge=0)
+    max_range_m: float = Field(50.0, gt=0)
+    fov_half_deg: float = Field(45.0, gt=0, le=90)
+    max_rows: int = Field(6, ge=1)
+
+
 class OverlayConfig(_Strict):
     style: Literal["tag"] = "tag"
     show: OverlayShowConfig = Field(default_factory=OverlayShowConfig)
     colors: OverlayColors = Field(default_factory=OverlayColors)
+    radar_panel: RadarPanelConfig = Field(default_factory=RadarPanelConfig)
 
 
 class LiteConfig(_Strict):

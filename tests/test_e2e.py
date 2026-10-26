@@ -10,12 +10,15 @@ from pathlib import Path
 from typing import Any
 
 import av
+import cv2
 import numpy as np
 import pytest
 
 from speed_trap.cli import main
 from speed_trap.config import Config
+from speed_trap.geometry import RadarModel
 from speed_trap.pipeline import Pipeline
+from speed_trap.render.radar_panel import RadarPanel
 from speed_trap.source import RecordedSessionSource
 from speed_trap.synth import COMING_LANE_Y, SynthVehicle, generate_session
 from speed_trap.types import Detection, FrameBundle
@@ -326,3 +329,68 @@ def test_pipeline_accepts_any_source(tmp_path: Path) -> None:
     assert counters["frames"] == 3
     assert decoded_frame_count(tmp_path / "out" / "0000.overlay.mp4") == 3
 
+
+def video_size(path: Path) -> tuple[int, int]:
+    with av.open(str(path)) as container:
+        stream = container.streams.video[0]
+        return stream.codec_context.width, stream.codec_context.height
+
+
+def test_overlay_video_includes_radar_panel(
+    tmp_path: Path, synth_session: Path, cfg_file: Path
+) -> None:
+    frame_w, frame_h = RecordedSessionSource(synth_session, Config().radar).width, 972
+    panel_w = RadarPanel(
+        RadarModel.from_config(Config().radar, Config().camera.pose.height_m, None),
+        Config().overlay,
+        frame_w,
+        frame_h,
+    ).width_px
+    base = ["process", str(synth_session), "--config", str(cfg_file), "--mode", "lite"]
+    assert main([*base, "--out", str(tmp_path / "on")]) == 0
+    assert (
+        main([*base, "--set", "overlay.radar_panel.enabled=false", "--out", str(tmp_path / "off")])
+        == 0
+    )
+    assert video_size(tmp_path / "on" / "s000001" / "0000.overlay.mp4") == (
+        frame_w + panel_w,
+        frame_h,
+    )
+    assert video_size(tmp_path / "off" / "s000001" / "0000.overlay.mp4") == (frame_w, frame_h)
+
+
+def test_captures_stay_panel_free(tmp_path: Path, synth_session: Path, cfg_file: Path) -> None:
+    out = tmp_path / "out"
+    args = ["process", str(synth_session), "--config", str(cfg_file), "--mode", "lite"]
+    assert main([*args, "--out", str(out), "--capture"]) == 0
+    frame_w = RecordedSessionSource(synth_session, Config().radar).width
+    jpgs = list((out / "s000001" / "captures").glob("*.jpg"))
+    assert jpgs
+    for jpg in jpgs:
+        image = cv2.imread(str(jpg))
+        assert image is not None and image.shape[1] <= frame_w
+
+
+def test_azimuth_mode_still_captures_speeders(
+    tmp_path: Path, synth_session: Path, cfg_file: Path
+) -> None:
+    out = tmp_path / "out" / "s000001"
+    args = ["process", str(synth_session), "--config", str(cfg_file), "--out", str(out.parent)]
+    assert (
+        main(
+            [*args, "--capture", "--set", "fusion.match_on=azimuth", *truth_detector(synth_session)]
+        )
+        == 0
+    )
+    events = load_sidecars(out / "captures")
+    expected = {v["vehicle_id"] for v in expected_vehicles(synth_session)}
+    matched = {
+        truth_vehicle_at(
+            synth_session,
+            e["segment"],
+            e["capture"]["frame_index"],
+            tuple(e["capture"]["bbox_xyxy"]),
+        )
+        for e in events
+    }
+    assert events and matched <= expected

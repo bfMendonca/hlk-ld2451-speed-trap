@@ -11,6 +11,8 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Literal
 
+import numpy as np
+
 from speed_trap.config import Config, config_hash
 from speed_trap.detect import Detector
 from speed_trap.fusion import FusedTrack, Fusion
@@ -18,6 +20,7 @@ from speed_trap.geometry import CameraModel, RadarModel
 from speed_trap.lite import RadarSubject, RadarTargetLinker
 from speed_trap.monitor import Candidate, SpeedingMonitor
 from speed_trap.render.draw import HudInfo, Renderer
+from speed_trap.render.radar_panel import RadarPanel
 from speed_trap.sinks import CaptureSink, TracksSink, VideoSink, write_run_info
 from speed_trap.tracker import Tracker
 from speed_trap.types import FrameBundle, RadarScan, RadarTarget, Source
@@ -63,6 +66,9 @@ class Pipeline:
         )
         self._renderer = Renderer(
             self._camera, self._radar, cfg.overlay, cfg.lite, far_range_m=cfg.fusion.max_range_m
+        )
+        self._panel: RadarPanel | None = (
+            RadarPanel(self._radar, cfg.overlay, w, h) if cfg.overlay.radar_panel.enabled else None
         )
         self._monitor = SpeedingMonitor(cfg.speed, cfg.capture, w, h)
         fps = source.fps if source.fps > 0 else _FALLBACK_FPS
@@ -113,7 +119,10 @@ class Pipeline:
                 reported, t_report = seg_frames, time.perf_counter()
 
         try:
-            self._video = VideoSink(self._out, src.width, src.height, cfg.output.video_codec)
+            panel_w = self._panel.width_px if self._panel is not None else 0
+            self._video = VideoSink(
+                self._out, src.width + panel_w, src.height, cfg.output.video_codec
+            )
             self._tracks_sink = TracksSink(self._out / "tracks.jsonl")
             if cfg.capture.enabled:
                 self._captures = CaptureSink(
@@ -200,6 +209,8 @@ class Pipeline:
         if self._captures is not None and candidates:
             self._captures.offer(candidates, b.image, rendered, b.wall_time_ns)
         assert self._video is not None
+        if self._panel is not None:  # after the capture sink took its copy: crops stay panel-free
+            rendered = np.hstack((rendered, self._panel.draw(b.ts_ns, b.scans)))
         self._video.write(b.segment, b.ts_ns, rendered)
         self._finish(finished)
 

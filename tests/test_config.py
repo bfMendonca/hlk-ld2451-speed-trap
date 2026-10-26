@@ -1,10 +1,12 @@
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from speed_trap.config import (
     Config,
     ConfigError,
+    OverlayConfig,
     apply_overrides,
     config_hash,
     default_config_text,
@@ -115,3 +117,37 @@ def test_video_codec_only_h264(tmp_path: Path) -> None:
     p.write_text("output:\n  video_codec: h265\n")
     with pytest.raises(ConfigError, match=r"output\.video_codec"):
         load_config(p)
+
+
+def test_radar_panel_defaults() -> None:
+    cfg = OverlayConfig()
+    panel = cfg.radar_panel
+    assert (panel.enabled, panel.width_frac, panel.trail_s) == (True, 0.333, 3.5)
+    assert (panel.min_speed_kmh, panel.max_range_m) == (15.0, 50.0)
+    assert (panel.fov_half_deg, panel.max_rows) == (45.0, 6)
+    assert cfg.show.wedge is False
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"width_frac": 0},
+        {"width_frac": 1.5},
+        {"trail_s": 0},
+        {"max_rows": 0},
+        {"fov_half_deg": 100},
+        {"nope": 1},
+    ],
+)
+def test_radar_panel_rejects_bad_values(bad: dict[str, float]) -> None:
+    with pytest.raises(ValidationError):
+        OverlayConfig.model_validate({"radar_panel": bad})
+
+
+def test_fusion_match_on_default_and_validation() -> None:
+    from speed_trap.config import FusionConfig
+
+    assert FusionConfig().match_on == "range_azimuth"
+    assert FusionConfig(match_on="azimuth").match_on == "azimuth"
+    with pytest.raises(ValidationError):
+        FusionConfig(match_on="nope")  # type: ignore[arg-type]

@@ -26,6 +26,7 @@ _INVALID = 1e6
 _RANGE_STEP_HALF_M = 0.5  # radar range quantisation, ±0.5 m
 _ANGLE_STEP_HALF_DEG = 0.5  # radar angle quantisation, ±0.5 deg
 _MIN_COSINE = 0.5
+_BEARING_RANGE_M = 1000.0  # azimuth-only mode: a track is a bearing, kept as a far point on its ray
 _Sample = tuple[int, float, float]  # (t_ns, road x, road y)
 
 
@@ -45,6 +46,7 @@ class FusedTrack:
     reliable: bool = False
     reliable_ever: bool = False
     direction: Direction | None = None
+    az_half_span_deg: float = 0.0  # azimuth-only mode: half the box's angular width
 
     @property
     def subject_id(self) -> int:
@@ -122,6 +124,7 @@ class Fusion:
         self._road = road
         self._lanes = sorted(fusion.lanes) if fusion.lanes is not None else None
         self._tracks: dict[int, FusedTrack] = {}
+        self._azimuth_only = fusion.match_on == "azimuth"
 
     @property
     def tracks(self) -> dict[int, FusedTrack]:
@@ -162,7 +165,15 @@ class Fusion:
         x0, _, x1, y1 = obs.xyxy
         t.road_xy = self._camera.backproject_ground((x0 + x1) / 2, y1)
         t.road_points.append((ts_ns, t.road_xy))
-        if t.road_xy is not None:
+        if self._azimuth_only:
+            az0 = self._camera.ray_azimuth_deg(x0, y1)
+            az1 = self._camera.ray_azimuth_deg(x1, y1)
+            az = math.radians((az0 + az1) / 2)
+            t.az_half_span_deg = abs(az0 - az1) / 2
+            t.road_history.append(
+                (ts_ns, _BEARING_RANGE_M * math.cos(az), _BEARING_RANGE_M * math.sin(az))
+            )
+        elif t.road_xy is not None:
             t.road_history.append((ts_ns, *t.road_xy))
         horizon = ts_ns - round(4 * self._cfg.direction_window_s * 1e9)
         while t.road_history and t.road_history[0][0] < horizon:
@@ -264,6 +275,22 @@ class Fusion:
                 return None
         return cost
 
+    def _azimuth_cost(
+        self, t: FusedTrack, xy: tuple[float, float], target: RadarTarget
+    ) -> float | None:
+        """Azimuth-only pair cost: the radar bearing must fall within the box's span plus margin."""
+        r_target = _target_ground_range(self._radar, target)
+        if r_target > self._cfg.max_range_m:
+            return None
+        # Put the camera's bearing at the radar's own range, so the radar offset gives no parallax.
+        bearing = math.atan2(xy[1], xy[0])
+        _, az = self._radar.road_to_polar(
+            r_target * math.cos(bearing), r_target * math.sin(bearing)
+        )
+        gate = t.az_half_span_deg + _ANGLE_STEP_HALF_DEG + self._cfg.gate.angle_margin_deg
+        ratio = abs(az - target.angle_deg) / gate
+        return ratio**2 if ratio <= 1 else None
+
     def _match_scan(self, tracks: list[FusedTrack], sc: RadarScan) -> None:
         if not tracks or not sc.targets:
             return
@@ -274,10 +301,18 @@ class Fusion:
             if hist is None:
                 continue
             xy = (hist[-1][1], hist[-1][2])
-            direction, radial = self._motion_direction(hist), self._radial_kmh(hist)
-            verified[i] = direction is not None and radial is not None
+            direction: Direction | None = None
+            radial: float | None = None
+            if self._azimuth_only:
+                verified[i] = True  # the bearing is the evidence, as with lite's radar-only pillars
+            else:
+                direction, radial = self._motion_direction(hist), self._radial_kmh(hist)
+                verified[i] = direction is not None and radial is not None
             for j, target in enumerate(sc.targets):
-                c = self._pair_cost(xy, direction, radial, target)
+                if self._azimuth_only:
+                    c = self._azimuth_cost(t, xy, target)
+                else:
+                    c = self._pair_cost(xy, direction, radial, target)
                 if c is not None:
                     cost[i, j] = c
         valid = cost < _INVALID

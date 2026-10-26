@@ -73,8 +73,14 @@ capture is made.
   the Pi's real frame rate is irregular (about 20–22 fps, with dropped frames and gaps).
 - **Lite mode**: no detector at all. Each radar target is drawn as a pillar on the road, which
   makes it fast on any laptop and the right tool for checking calibration.
-- **Professional overlay**: corner brackets, speed tags with leader lines, the radar coverage
-  wedge with range rings, and a HUD with session time, legend and the speed limit.
+- **Professional overlay**: corner brackets, speed tags with leader lines and a HUD with session
+  time, legend and the speed limit. The radar coverage wedge with range rings is still available
+  (`overlay.show.wedge`) but off by default.
+- **Radar side panel**: a strip to the right of the overlay video with a top-down fan of the
+  radar's own readings (3.5 s fading trail, coloured by direction) and a table of the current
+  readings: speed, distance, angle, SNR, direction. It uses only radar data, never the camera
+  calibration or fusion, and hides readings under 15 km/h. Configure it under
+  `overlay.radar_panel`; the output video grows by `width_frac` (default one third).
 - **Speeder captures**: the best frame of each pass (largest box, not cut by the frame edge),
   a JSON sidecar with the full radar history, and the config hash for traceability.
 - **YAML-first configuration**: one validated config file, `--set key=value` overrides, and a
