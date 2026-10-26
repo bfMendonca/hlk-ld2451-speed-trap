@@ -47,7 +47,9 @@ def _parser() -> argparse.ArgumentParser:
     proc.add_argument("--end", type=float, metavar="S", help="seconds from session start")
     proc.add_argument("--mode", choices=["full", "lite"], default="full")
     proc.add_argument("--device", choices=["cpu", "mps", "cuda"], help="detector device")
-    proc.add_argument("--out", type=Path, metavar="DIR", help="default: output.dir/<session>")
+    proc.add_argument(
+        "--out", type=Path, metavar="DIR", help="default: output.dir; writes DIR/<session>[-N]"
+    )
     proc.add_argument(
         "--capture",
         action=argparse.BooleanOptionalAction,
@@ -142,6 +144,16 @@ def _cmd_synth(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _fresh_out_dir(parent: Path, session_id: str) -> Path:
+    """`parent/<session_id>`, or `-2`, `-3`, ... after it, so a run never overwrites another."""
+    out_dir = parent / session_id
+    n = 2
+    while out_dir.exists():
+        out_dir = parent / f"{session_id}-{n}"
+        n += 1
+    return out_dir
+
+
 def _cmd_process(args: argparse.Namespace) -> int:
     from speed_trap.pipeline import Pipeline
     from speed_trap.source import RecordedSessionSource, SourceError
@@ -167,7 +179,8 @@ def _cmd_process(args: argparse.Namespace) -> int:
         from speed_trap.detect import make_detector
 
         detector = make_detector(cfg.detector)
-    out_dir: Path = args.out if args.out is not None else cfg.output.dir / source.session_id
+    parent: Path = args.out if args.out is not None else cfg.output.dir
+    out_dir = _fresh_out_dir(parent, source.session_id)
     pipeline = Pipeline(cfg, source, out_dir, args.mode, detector)
 
     counters = pipeline.run(ProgressPrinter(source.frame_counts))

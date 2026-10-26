@@ -5,6 +5,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- `speed-trap process --out DIR` is now a parent folder: each run writes
+  `DIR/<session_id>/`, or `<session_id>-2/`, `-3/`, ... if that exists, so processing several
+  sessions, or the same one twice, never overwrites earlier results.
+
 ### Added
 
 - `speed-trap process`: overlay video, `tracks.jsonl`, speeder captures and `run.json` from a

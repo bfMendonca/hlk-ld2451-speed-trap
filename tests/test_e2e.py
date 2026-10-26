@@ -107,9 +107,9 @@ def tracks_matching(session: Path, tracks: list[dict[str, Any]], vehicle_id: int
 
 
 def test_lite_end_to_end(tmp_path: Path, synth_session: Path, cfg_file: Path) -> None:
-    out = tmp_path / "out"
+    out = tmp_path / "out" / "s000001"
     args = ["process", str(synth_session), "--config", str(cfg_file), "--mode", "lite"]
-    assert main([*args, "--out", str(out), "--capture"]) == 0
+    assert main([*args, "--out", str(out.parent), "--capture"]) == 0
 
     for seg in (0, 1):
         assert decoded_frame_count(out / f"{seg:04d}.overlay.mp4") == csv_rows(
@@ -142,8 +142,8 @@ def test_lite_end_to_end(tmp_path: Path, synth_session: Path, cfg_file: Path) ->
 def test_full_end_to_end_with_truth_detector(
     tmp_path: Path, synth_session: Path, cfg_file: Path
 ) -> None:
-    out = tmp_path / "out"
-    args = ["process", str(synth_session), "--config", str(cfg_file), "--out", str(out)]
+    out = tmp_path / "out" / "s000001"
+    args = ["process", str(synth_session), "--config", str(cfg_file), "--out", str(out.parent)]
     rc = main([*args, "--capture", *truth_detector(synth_session)])
     assert rc == 0
     events = load_sidecars(out / "captures")
@@ -185,8 +185,8 @@ def test_session_without_radar_all_gray(
     session = tmp_path / "s000001"
     shutil.copytree(synth_session, session)
     shutil.rmtree(session / "radar")
-    out = tmp_path / "out"
-    args = ["process", str(session), "--config", str(cfg_file), "--out", str(out)]
+    out = tmp_path / "out" / "s000001"
+    args = ["process", str(session), "--config", str(cfg_file), "--out", str(out.parent)]
     rc = main([*args, "--capture", "--segment", "0", *truth_detector(session)])
     assert rc == 0
     run = json.loads((out / "run.json").read_text(encoding="utf-8"))
@@ -253,8 +253,9 @@ def test_parked_car_overlapped_by_passing_car_never_gets_a_speed(
     passing = SynthVehicle(1, "coming", COMING_LANE_Y, 30.0, 45.0, 0.5)
     parked = SynthVehicle(2, None, parked_xy[1], 0.0, parked_xy[0], 0.0)
     session = generate_session(tmp_path / "syn", Config(), 8.0, 1, vehicles=[passing, parked])
-    out = tmp_path / "out"
-    args = ["process", str(session), "--config", str(cfg_file), "--out", str(out), "--capture"]
+    out = tmp_path / "out" / "s000001"
+    args = ["process", str(session), "--config", str(cfg_file), "--out", str(out.parent)]
+    args.append("--capture")
     assert main([*args, "--set", "speed.limit_kmh=25", *truth_detector(session)]) == 0
 
     tracks = load_tracks(out / "tracks.jsonl")
@@ -281,8 +282,9 @@ def test_frame_gap_never_gives_the_follower_the_leaders_speed(
     follower = SynthVehicle(2, "coming", COMING_LANE_Y, 45.0, 50.5, 1.5)
     cfg = Config.model_validate({"synth": {"frame_gaps": [[2.68, 1.1]]}})
     session = generate_session(tmp_path / "syn", cfg, 6.0, 1, vehicles=[lead, follower])
-    out = tmp_path / "out"
-    args = ["process", str(session), "--config", str(cfg_file), "--out", str(out), "--capture"]
+    out = tmp_path / "out" / "s000001"
+    args = ["process", str(session), "--config", str(cfg_file), "--out", str(out.parent)]
+    args.append("--capture")
     assert main([*args, "--set", "speed.limit_kmh=50", *truth_detector(session)]) == 0
 
     tracks = load_tracks(out / "tracks.jsonl")
@@ -323,3 +325,4 @@ def test_pipeline_accepts_any_source(tmp_path: Path) -> None:
     counters = Pipeline(Config(), InMemorySource(), tmp_path / "out", "lite", None).run()
     assert counters["frames"] == 3
     assert decoded_frame_count(tmp_path / "out" / "0000.overlay.mp4") == 3
+

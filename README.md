@@ -222,7 +222,9 @@ uv run speed-trap process demo/s000001 --config demo/cfg.yaml --capture \
 uv run speed-trap process ~/recordings/s000012 --config cfg.yaml --capture
 ```
 
-Outputs land in `out/<session_id>/` unless you pass `--out`.
+Outputs land in `out/<session_id>/` (`--out DIR` changes the parent to `DIR/<session_id>/`).
+A run never overwrites an earlier one: if that folder exists, it writes `<session_id>-2/`,
+`-3/`, and so on.
 
 ## Command line
 
@@ -230,7 +232,7 @@ Outputs land in `out/<session_id>/` unless you pass `--out`.
 speed-trap process SESSION_DIR --config cfg.yaml
            [--segment N ...] [--start S] [--end S]     # seconds from session start
            [--mode full|lite] [--device cpu|mps|cuda]
-           [--out DIR] [--capture/--no-capture]
+           [--out DIR] [--capture/--no-capture]        # writes DIR/<session>[-N]
            [--set KEY=VALUE ...]                       # dotted key, e.g. speed.limit_kmh=50
            [-v/-vv]
 speed-trap init-config PATH

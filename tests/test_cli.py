@@ -112,7 +112,7 @@ def test_lite_mode_does_not_import_torch(tmp_path: Path, synth_session: Path) ->
         [sys.executable, "-c", code], capture_output=True, text=True, env=env, timeout=300
     )
     assert proc.returncode == 0, proc.stderr
-    assert (out / "0001.overlay.mp4").exists()
+    assert (out / "s000001" / "0001.overlay.mp4").exists()
 
 
 def test_empty_selection_exit_2_no_output_dir(
@@ -124,6 +124,21 @@ def test_empty_selection_exit_2_no_output_dir(
     assert main([*args, "--start", "15", "--out", str(out)]) == 2  # 15 s is in segment 1
     assert not out.exists()
     assert "no frames" in capsys.readouterr().err
+
+
+def test_out_is_a_parent_and_reruns_never_overwrite(
+    tmp_path: Path, synth_session: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    cfg_file = write_cfg(tmp_path)
+    out = tmp_path / "out"
+    args = ["process", str(synth_session), "--config", str(cfg_file), "--mode", "lite"]
+    args += ["--segment", "1", "--out", str(out)]
+    assert main(args) == 0
+    assert main(args) == 0
+    printed = [Path(line) for line in capsys.readouterr().out.split()]
+    assert printed == [out / "s000001", out / "s000001-2"]
+    for d in printed:
+        assert (d / "run.json").exists() and (d / "0001.overlay.mp4").exists()
 
 
 class FailingDetector:
@@ -160,7 +175,7 @@ def test_failed_run_exit_code_and_run_json_error(
     out = tmp_path / "out"
     args = ["process", str(synth_session), "--config", str(cfg_file), "--segment", "1"]
     assert main([*args, "--out", str(out)]) == code
-    run = json.loads((out / "run.json").read_text(encoding="utf-8"))
+    run = json.loads((out / "s000001" / "run.json").read_text(encoding="utf-8"))
     assert run["error"].startswith(type(exc).__name__)
     assert run["counters"]["frames"] == 4
     assert "Traceback" not in capsys.readouterr().err
