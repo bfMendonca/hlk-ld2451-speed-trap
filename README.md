@@ -31,7 +31,7 @@
 
 <img src="docs/images/demo-full.gif" alt="Annotated overlay on a real recording: two cars tracked with corner brackets and radar speed tags, both captured as speeders, with the radar side panel on the right" width="85%">
 
-<sub>Full mode on a real recording (session s000064, limit 40 km/h). Two coming cars, at 42 and 46 km/h by radar, are tracked, matched to the radar and captured. The strip on the right is the radar's own view: a top-down fan with a fading trail and a table of the current readings.</sub>
+<sub>Full mode on a real recording (session s000064, limit 40 km/h), with this installation's calibrated config: bearing matching (`fusion.match_on: azimuth`) and a 60 m `fusion.max_range_m`. Two coming cars, peaking at 42 and 47 km/h by radar, are tracked, matched to the radar and captured. The strip on the right is the radar's own view: a top-down fan with a fading trail and a table of the current readings.</sub>
 
 </div>
 
@@ -92,49 +92,40 @@ capture is made.
 
 ## Demo
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/images/overlay-full.jpg" alt="Full mode on a real recording: detector boxes with radar speed tags and the radar side panel"></td>
-    <td width="50%"><img src="docs/images/demo-lite.gif" alt="Lite mode: radar targets drawn as pillars on the road"></td>
-  </tr>
-  <tr>
-    <td align="center"><b>Full mode</b>: detector + tracker + radar fusion.<br><sub>Teal: coming · amber: going · gray dashed: no reliable radar reading.</sub></td>
-    <td align="center"><b>Lite mode</b>: radar only, no detector.<br><sub>Pillar width is the radar's 1° angle step at that distance.</sub></td>
-  </tr>
-</table>
+<p align="center">
+  <img src="docs/images/overlay-full.jpg" alt="Full mode on a real recording: detector boxes with radar speed tags and the radar side panel" width="85%"><br>
+  <b>Full mode</b>: detector + tracker + radar fusion.<br>
+  <sub>Teal: coming · amber: going · gray dashed: no reliable radar reading.</sub>
+</p>
 
 A speeding capture is a clean crop plus a sidecar
 ([full example](docs/images/capture-example.json)):
 
 <table>
   <tr>
-    <td width="32%"><img src="docs/images/capture-example.jpg" alt="Capture crop of the speeding vehicle"></td>
+    <td width="32%"><img src="docs/images/capture-example.jpg" alt="Capture crop of the speeding vehicle, licence plate blurred"></td>
     <td>
 
 ```json
 {
   "event": "speeding",
-  "session": "s000001",
-  "track_id": 4,
+  "session": "s000064",
+  "track_id": 8,
   "direction": "coming",
   "limit_kmh": 40.0,
-  "speed_kmh": { "max": 60.0, "mean": 58.2, "at_capture": 55.0 },
-  "capture": { "frame_index": 100, "sensor_ts_ns": 104240000000, "...": "..." },
+  "speed_kmh": { "max": 47.0, "mean": 45.3, "at_capture": 42.0 },
+  "capture": { "frame_index": 387, "sensor_ts_ns": 141607354000, "...": "..." },
   "radar_history": [
-    { "speed_kmh": 60.0, "distance_m": 29, "angle_deg": 12, "snr": 37, "approaching": true },
+    { "speed_kmh": 45.0, "distance_m": 44, "angle_deg": 0, "snr": 178, "approaching": true },
     "..."
   ],
-  "config_sha256": "f9cef8ee…"
+  "config_sha256": "76aaca81…"
 }
 ```
 
 </td>
   </tr>
 </table>
-
-> [!NOTE]
-> The demo above is a synthetic session (flat-shaded vehicles and a simulated LD2451), rendered
-> with the ground-truth detector. Footage from the real installation will replace it.
 
 ## Hardware
 
@@ -187,8 +178,8 @@ flowchart LR
 | Distance-aware gates, Hungarian assignment | A reading going to a vehicle in another place or lane |
 | Ambiguity guard (ties and near-ties dropped) | Guessing between two plausible vehicles |
 | Readings compared at their own timestamp; stale ones skipped | A following car inheriting the car in front's reading after a frame gap |
-| Direction and speed consistency with the track's own motion | A parked or slower car taking a passing car's speed |
-| At least one *verified* reading before a capture | A brand-new track being captured on position alone |
+| Direction and speed consistency with the track's own motion (default `range_azimuth` mode) | A parked or slower car taking a passing car's speed |
+| At least one *verified* reading before a capture (default `range_azimuth` mode) | A brand-new track being captured on position alone |
 | Raw radial speed by default (cosine correction off) | Overstating speed: the radial component reads slightly low |
 
 ### Matching on bearing (`fusion.match_on: azimuth`)
@@ -211,7 +202,7 @@ What this mode needs from the calibration:
   the radar's slant distance to ground range for `fusion.max_range_m`.
 - **`radar.clock_offset_ms`**: matters for crossing traffic.
 - **`fusion.gate.angle_margin_deg`**: tolerance added to the box's half-width and the radar's
-  0.5° step; the radar's angle typically jitters by 1–5°.
+  ±0.5° quantisation; the radar's angle typically jitters by 1–5°.
 
 ## Installation
 
@@ -347,7 +338,6 @@ Fusion is only as good as the geometry, so set it up before trusting full-mode c
 
 ## Roadmap
 
-- [ ] Process footage from the real installation and replace the synthetic demo
 - [ ] Live processing on a Jetson or a stream receiver (the core is already causal and I/O-free)
 - [ ] Automatic camera–radar calibration from matched passes
 - [ ] Licence-plate reading on speeder captures
@@ -363,9 +353,9 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy
 
 The end-to-end tests generate synthetic sessions (including frame gaps and a car passing
 in front of a parked one) and check every capture, track and the parked vehicle against the
-ground truth, in both modes. The design spec and implementation plan are in
-[`docs/design/`](docs/design/). See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull
-request.
+ground truth, in both modes. Design specs and implementation plans are in
+[`docs/design/`](docs/design/) and [`docs/superpowers/`](docs/superpowers/). See
+[CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 ## License
 
